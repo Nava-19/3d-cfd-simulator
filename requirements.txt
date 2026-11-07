@@ -1,0 +1,9 @@
+PyQt6>=6.6.0
+pyvista>=0.43.0
+pyvistaqt>=0.11.0
+pyqtgraph>=0.13.3
+jinja2>=3.1.2
+scipy>=1.11.0
+numpy>=1.26.0
+matplotlib>=3.8.0
+pytest>=8.0.0

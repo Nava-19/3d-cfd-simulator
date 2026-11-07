@@ -1,0 +1,19 @@
+# Entorno virtual
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+# OpenFOAM temporales y resultados pesados
+cases/*/processor*
+cases/*/postProcessing/
+cases/*/[0-9]*
+!cases/*/[0-9]*.orig
+*.log
+
+# VTK y renders temporales
+*.vtk
+*.vtm
+*.png
+*.jpg
+*.pdf

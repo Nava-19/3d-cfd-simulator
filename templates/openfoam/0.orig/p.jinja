@@ -1,0 +1,58 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2312                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       volScalarField;
+    location    "0";
+    object      p;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+dimensions      [1 -1 -2 0 0 0 0];
+
+internalField   uniform {{ p_inf }};
+
+boundaryField
+{
+    inlet
+    {
+        type            fixedValue;
+        value           uniform {{ p_inf }};
+    }
+
+    outlet
+    {
+        type            waveTransmissive;
+        gamma           1.4;
+        field           p;
+        lInf            5.0;
+        value           uniform {{ p_inf }};
+    }
+
+    farfield
+    {
+        type            fixedValue;
+        value           uniform {{ p_inf }};
+    }
+
+    symmetry
+    {
+        type            symmetryPlane;
+    }
+
+    {% for patch in rocket_patches %}
+    {{ patch }}
+    {
+        type            zeroGradient;
+    }
+    {% endfor %}
+}
+
+// ************************************************************************* //

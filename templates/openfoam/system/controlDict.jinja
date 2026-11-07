@@ -1,0 +1,62 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2312                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      controlDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+application         rhoCentralFoam;
+
+startFrom           startTime;
+startTime           0;
+stopAt              endTime;
+endTime             {{ end_time }};
+deltaT              {{ initial_delta_t }};
+writeControl        timeStep;
+writeInterval       {{ write_interval }};
+purgeWrite          5;
+writeFormat         ascii;
+writePrecision      8;
+writeCompression    off;
+timeFormat          general;
+timePrecision       6;
+runTimeModifiable   true;
+
+adjustTimeStep      yes;
+maxCo               0.75;
+maxDeltaT           1e-05;
+
+functions
+{
+    forces_breakdown
+    {
+        type            forceCoeffs;
+        libs            ("libforces.so");
+        writeControl    timeStep;
+        writeInterval   1;
+
+        patches         ({{ rocket_patches | join(' ') }});
+        rho             rho;
+        log             true;
+        rhoInf          {{ density_kg_m3 }};
+        CofR            ({{ cofr_x }} {{ cofr_y }} {{ cofr_z }});
+        liftDir         ({{ lift_dir_x }} {{ lift_dir_y }} 0);
+        dragDir         ({{ drag_dir_x }} {{ drag_dir_y }} 0);
+        pitchAxis       (0 0 1);
+        magUInf         {{ velocity_mag }};
+        lRef            {{ ref_length }};
+        Aref            {{ ref_area }};
+    }
+}
+
+// ************************************************************************* //
