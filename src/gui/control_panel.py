@@ -1,8 +1,9 @@
 """
-Panel de Control de Vuelo y Telemetría Atmosférica ISA 1976 (Fase 8.2).
-Permite configurar (Mach, Altitud, Ángulo de Ataque), alternar entre el Modo de Validación
-Analítica (Cono Taylor-Maccoll) y Simulación de Cohete 3D, e inspeccionar las variables
-termodinámicas de entrada en tiempo real antes de lanzar OpenFOAM.
+Panel de Control de Vuelo y Telemetría Atmosférica ISA 1976 (Fase 8.2 y 8.5).
+Permite configurar (Mach, Altitud, Ángulo de Ataque), alternar entre:
+    1. Cono Supersónico (Validación Taylor-Maccoll).
+    2. Esfera Supersónica (Blunt Body con Bow Shock desprendido y estela).
+    3. Cohete Lanzador 3D (Importación STL con dominio de estela 8L).
 """
 
 from pathlib import Path
@@ -13,7 +14,6 @@ from PyQt6.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QGroupBox,
-    QHBoxLayout,
     QLabel,
     QPushButton,
     QVBoxLayout,
@@ -49,20 +49,21 @@ class FlightControlPanel(QWidget):
         main_layout.setContentsMargins(10, 10, 10, 10)
         main_layout.setSpacing(10)
 
-        # 1. Selector de Modo de Simulación
-        mode_group = QGroupBox("1. Modo de Operación")
+        # 1. Selector de Modo de Simulación / Objeto Predeterminado
+        mode_group = QGroupBox("1. Geometría y Modo de Operación")
         mode_layout = QVBoxLayout(mode_group)
 
         self.combo_mode = QComboBox()
         self.combo_mode.addItems([
-            "Modo Validación (Cono Taylor-Maccoll)",
-            "Simulación Completa Cohete 3D"
+            "Modo 1: Cono Supersónico (Taylor-Maccoll)",
+            "Modo 2: Esfera Supersónica (Bow Shock + Estela)",
+            "Modo 3: Cohete Lanzador 3D (STLs + Estela 8L)"
         ])
         mode_layout.addWidget(self.combo_mode)
 
         self.btn_import_stl = QPushButton("📐 Importar STLs del Cohete...")
         self.btn_import_stl.setEnabled(False)
-        self.lbl_stl_status = QLabel("Geometría: Cuña Axisimétrica (Cono 15°)")
+        self.lbl_stl_status = QLabel("Geometría: Cono Axisimétrico (θc = 15.0°)")
         self.lbl_stl_status.setStyleSheet("color: #9CA3AF; font-size: 11px;")
         mode_layout.addWidget(self.btn_import_stl)
         mode_layout.addWidget(self.lbl_stl_status)
@@ -91,6 +92,7 @@ class FlightControlPanel(QWidget):
         self.spin_alpha.setDecimals(1)
         self.spin_alpha.setSuffix(" °")
         self.spin_alpha.setValue(0.0)
+        self.spin_alpha.setEnabled(False)
 
         self.spin_cone_angle = QDoubleSpinBox()
         self.spin_cone_angle.setRange(5.0, 35.0)
@@ -139,10 +141,10 @@ class FlightControlPanel(QWidget):
         main_layout.addWidget(isa_group)
 
         # 4. Controles de Ejecución y Carga
-        exec_group = QGroupBox("4. Control del Solver (WSL2)")
+        exec_group = QGroupBox("4. Control del Solver y Casos Pre-Simulados")
         exec_layout = QVBoxLayout(exec_group)
 
-        self.btn_run = QPushButton("🚀 Iniciar Simulación CFD")
+        self.btn_run = QPushButton("🚀 Iniciar Simulación CFD (WSL2)")
         self.btn_run.setStyleSheet(
             "background-color: #2563EB; color: white; font-weight: bold; padding: 8px; border-radius: 4px;"
         )
@@ -153,13 +155,15 @@ class FlightControlPanel(QWidget):
             "background-color: #DC2626; color: white; font-weight: bold; padding: 6px; border-radius: 4px;"
         )
 
-        self.btn_load_benchmark = QPushButton("📂 Cargar Caso Cono M=2.0 Validado")
+        self.btn_load_benchmark = QPushButton("📂 Cargar Cono M=2.0 (Choque Oblicuo)")
+        self.btn_load_sphere = QPushButton("🌐 Cargar Esfera M=2.0 (Bow Shock + Estela)")
         self.btn_load_custom = QPushButton("📁 Abrir Otra Carpeta de Caso...")
         self.btn_export_db = QPushButton("💾 Exportar Punto a AeroDB (CSV/JSON)")
 
         exec_layout.addWidget(self.btn_run)
         exec_layout.addWidget(self.btn_abort)
         exec_layout.addWidget(self.btn_load_benchmark)
+        exec_layout.addWidget(self.btn_load_sphere)
         exec_layout.addWidget(self.btn_load_custom)
         exec_layout.addWidget(self.btn_export_db)
         main_layout.addWidget(exec_group)
@@ -177,25 +181,34 @@ class FlightControlPanel(QWidget):
         self.btn_run.clicked.connect(self._on_start_clicked)
         self.btn_abort.clicked.connect(self.abort_simulation_requested.emit)
         self.btn_load_benchmark.clicked.connect(self._on_load_default_benchmark)
+        self.btn_load_sphere.clicked.connect(self._on_load_sphere_benchmark)
         self.btn_load_custom.clicked.connect(self._on_load_custom_case)
         self.btn_export_db.clicked.connect(self.export_aerodb_requested.emit)
 
     def _on_mode_changed(self, index: int) -> None:
-        is_validation = index == 0
-        self.btn_import_stl.setEnabled(not is_validation)
-        self.spin_cone_angle.setEnabled(is_validation)
-        if is_validation:
+        is_cone = index == 0
+        is_sphere = index == 1
+        is_rocket = index == 2
+
+        self.btn_import_stl.setEnabled(is_rocket)
+        self.spin_cone_angle.setEnabled(is_cone)
+        self.spin_alpha.setEnabled(is_rocket)
+
+        if not is_rocket:
             self.spin_alpha.setValue(0.0)
-            self.spin_alpha.setEnabled(False)
+
+        if is_cone:
             self.lbl_stl_status.setText(
-                f"Geometría: Cuña Axisimétrica (Cono {self.spin_cone_angle.value():.1f}°)"
+                f"Geometría: Cono Axisimétrico (θc = {self.spin_cone_angle.value():.1f}°)"
             )
+        elif is_sphere:
+            self.lbl_stl_status.setText("Geometría: Esfera R=0.10m (Bow Shock + Estela 4.5R)")
         else:
-            self.spin_alpha.setEnabled(True)
             if self.stl_files:
-                self.lbl_stl_status.setText(f"{len(self.stl_files)} archivos STL cargados")
+                self.lbl_stl_status.setText(f"{len(self.stl_files)} archivos STL cargados (Dominio 3L/8L)")
             else:
-                self.lbl_stl_status.setText("Pendiente importar STLs (nose, fuselage, fins)")
+                self.lbl_stl_status.setText("Pendiente importar STLs (nose, fuselage, fins, base)")
+
         self._update_isa_preview()
 
     def _update_isa_preview(self) -> None:
@@ -222,7 +235,7 @@ class FlightControlPanel(QWidget):
 
         if self.combo_mode.currentIndex() == 0:
             self.lbl_stl_status.setText(
-                f"Geometría: Cuña Axisimétrica (Cono {self.spin_cone_angle.value():.1f}°)"
+                f"Geometría: Cono Axisimétrico (θc = {self.spin_cone_angle.value():.1f}°)"
             )
 
         self.flight_condition_changed.emit(cond)
@@ -243,8 +256,11 @@ class FlightControlPanel(QWidget):
         if self.current_condition is None:
             self._update_isa_preview()
 
+        idx = self.combo_mode.currentIndex()
+        mode_str = "validation" if idx == 0 else ("sphere" if idx == 1 else "rocket")
+
         config = {
-            "mode": "validation" if self.combo_mode.currentIndex() == 0 else "rocket",
+            "mode": mode_str,
             "flight_condition": self.current_condition,
             "cone_angle_deg": self.spin_cone_angle.value(),
             "stl_files": self.stl_files
@@ -252,8 +268,14 @@ class FlightControlPanel(QWidget):
         self.start_simulation_requested.emit(config)
 
     def _on_load_default_benchmark(self) -> None:
+        self.combo_mode.setCurrentIndex(0)
         default_dir = Path(__file__).resolve().parent.parent.parent / "cases" / "benchmark_cone_m2"
         self.load_case_requested.emit(str(default_dir))
+
+    def _on_load_sphere_benchmark(self) -> None:
+        self.combo_mode.setCurrentIndex(1)
+        sphere_dir = Path(__file__).resolve().parent.parent.parent / "cases" / "benchmark_sphere_m2"
+        self.load_case_requested.emit(str(sphere_dir))
 
     def _on_load_custom_case(self) -> None:
         folder = QFileDialog.getExistingDirectory(

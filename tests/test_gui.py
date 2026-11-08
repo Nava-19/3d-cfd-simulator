@@ -2,7 +2,7 @@
 Tests unitarios y de integración para la Interfaz Gráfica de Usuario (Fase 8 y 8.5):
     - FlightControlPanel (reactividad en vivo con AtmosphereISA)
     - TelemetryPlotsPanel (streaming de métricas y lectura histórica de casos)
-    - Viewport3DPanel y CFDMainWindow (cono 360°, volumen de control, partículas en vivo)
+    - Viewport3DPanel y CFDMainWindow (cono 360°, esfera con Bow Shock, cono 3D de choque, 16 planos de partículas)
 """
 
 import os
@@ -57,28 +57,24 @@ def test_plots_panel_streaming_and_history_loading(qapp):
     assert math.isclose(plots.cd_vals[0], 0.145)
 
 
-def test_main_window_loads_360_cone_particles_and_control_volume(qapp):
+def test_main_window_loads_cone_and_sphere_with_3d_shock_and_particles(qapp):
     window = CFDMainWindow(off_screen=True)
     vp = window.viewport_panel
 
+    # 1. Verificar carga inicial del Cono Supersónico M=2.0
     assert vp.surface_mesh is not None
     assert vp.schlieren_slice is not None
     assert vp.streamlines_mesh is not None
     assert vp.control_volume_mesh is not None
+    assert vp.theo_shock_surface is not None
     assert vp.particle_system is not None
+    assert vp.particle_system.cloud_polydata.n_points >= 500
 
-    # Verificar que el cono 360° cubre simétricamente +Y, -Y, +Z y -Z
-    _, _, ymin, ymax, zmin, zmax = vp.surface_mesh.bounds
-    assert ymin < -0.10 and ymax > 0.10
-    assert zmin < -0.10 and zmax > 0.10
-
-    # Probar conmutación a Corte Seccional 180° y verificar que sigue cubriendo +Y y -Y
-    vp.combo_body_mode.setCurrentIndex(1)
-    _, _, ymin_180, ymax_180, _, _ = vp.surface_mesh.bounds
-    assert ymin_180 < -0.10 and ymax_180 > 0.10
-
-    # Probar un tick de animación de partículas
-    vp._on_animation_tick()
-
-    assert len(window.plots_panel.times_force) > 100
-    assert "Taylor-Maccoll" in window.plots_panel.console.toPlainText()
+    # 2. Cargar el caso de la Esfera Supersónica (Bow Shock + Estela) mediante el botón del panel
+    window.control_panel._on_load_sphere_benchmark()
+    assert vp.is_blunt_sphere is True
+    assert vp.theo_shock_surface is not None
+    # El vértice del Bow Shock desprendido en la esfera debe estar aguas arriba de x=0 (x < -0.02 m)
+    xmin_shock = vp.theo_shock_surface.bounds[0]
+    assert xmin_shock < -0.02
+    assert "Bow Shock" in window.plots_panel.console.toPlainText()

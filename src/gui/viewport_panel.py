@@ -3,10 +3,10 @@ Panel Central del Visor 3D Acelerado por Hardware (Fase 8.4 y 8.5).
 Integra QVTKRenderWindowInteractor (vía pyvistaqt.QtInteractor) dentro de PyQt6.
 Permite superponer en tiempo real:
     - Cuerpo 3D Completo (360°) o Corte Seccional Meridiano (180° en Z <= 0) con opacidad regulable.
+    - Superficie 3D Translúcida de la Onda de Choque (Cono de Taylor-Maccoll o Hiperboloide Bow Shock de Billig).
     - Volumen de Control 3D del túnel numérico (cilindro/caja de dominio + ejes graduados en metros).
-    - Advección Cinemática de Partículas de Fluido en tiempo real (60 FPS mediante QTimer).
+    - Advección Cinemática de Partículas de Fluido en múltiples planos 3D (60 FPS mediante QTimer).
     - Plano de Efecto Schlieren Numérico simétrico (|∇ρ| y log10(1 + |∇ρ|)).
-    - Cono de onda de choque analítico exacto de Taylor-Maccoll (±β_TM).
     - Líneas de corriente (Streamlines) integradas con RK45 y coloreadas por número de Mach.
 """
 
@@ -26,6 +26,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from src.physics.blunt_body import BluntBodySolver, build_3d_conical_shock_surface
 from src.postprocess.aeroheating import AeroheatingMetrics, extract_aeroheating_surface
 from src.postprocess.particles import LagrangianParticleSystem
 from src.postprocess.schlieren import compute_numerical_schlieren
@@ -38,10 +39,10 @@ def reconstruct_cone_from_wedge(
     n_sectors_full: int = 72
 ) -> pv.PolyData:
     """
-    Si la superficie extraída proviene de una cuña axisimétrica de 5° (benchmark de cono),
+    Si la superficie extraída proviene de una cuña axisimétrica de 5° (cono o esfera),
     reconstruye por revolución alrededor del eje X:
-        - Si full_360=True: el cono 3D completo de 360° (-180° a +180°).
-        - Si full_360=False: el semicono posterior de 180° (Z <= 0, abarcando de +Y a -Y)
+        - Si full_360=True: el cuerpo 3D completo de 360° (0° a 360°).
+        - Si full_360=False: el semicuerpo posterior de 180° (Z <= 0, abarcando de +Y a -Y)
           para dejar despejado el plano meridiano Z=0 sin perder la silueta superior e inferior.
     Conserva intactos todos los campos escalares físicos (T, p, Cp).
     """
@@ -53,8 +54,6 @@ def reconstruct_cone_from_wedge(
     if full_360:
         angles = np.linspace(0.0, 360.0, n_sectors_full, endpoint=False)
     else:
-        # En la cuña original, ángulo 0° está en +Y (Z=0).
-        # Rotando de 0° a -180° (en sentido horario visto desde +X) barremos de +Y a -Y por Z <= 0.
         angles = np.linspace(-180.0, 0.0, max(n_sectors_full // 2, 18), endpoint=True)
 
     for ang in angles:
@@ -87,7 +86,7 @@ def build_control_volume_cylinder(bounds: tuple[float, float, float, float, floa
 
 
 class Viewport3DPanel(QWidget):
-    """Widget central con el motor de renderizado 3D VTK/PyVista, partículas en vivo y volumen de control."""
+    """Widget central con el motor de renderizado 3D VTK/PyVista, partículas 3D y cono de choque translúcido."""
 
     def __init__(self, parent: QWidget | None = None, off_screen: bool = False) -> None:
         super().__init__(parent)
@@ -99,11 +98,14 @@ class Viewport3DPanel(QWidget):
         self.schlieren_slice: pv.DataSet | None = None
         self.streamlines_mesh: pv.PolyData | None = None
         self.control_volume_mesh: pv.PolyData | None = None
+        self.theo_shock_surface: pv.PolyData | None = None
         self.particle_system: LagrangianParticleSystem | None = None
         self.aero_metrics: AeroheatingMetrics | None = None
         self.theo_shock_angle_deg: float | None = None
         self.domain_length_m: float = 0.5
         self.domain_bounds: tuple[float, float, float, float, float, float] | None = None
+        self.is_blunt_sphere: bool = False
+        self.current_mach: float = 2.0
 
         # Temporizador para la animación de partículas a ~33 FPS
         self.anim_timer = QTimer(self)
@@ -167,24 +169,25 @@ class Viewport3DPanel(QWidget):
         toolbar_row1.addWidget(btn_front)
 
         # ------------------------------------------------------------------
-        # Fila 2 de Barra de Herramientas: Capas Físicas, Partículas y Volumen de Control
+        # Fila 2 de Barra de Herramientas: Capas Físicas, Cono 3D Choque y Partículas
         # ------------------------------------------------------------------
         toolbar_row2 = QHBoxLayout()
         toolbar_row2.setContentsMargins(8, 2, 8, 4)
         toolbar_row2.setSpacing(12)
 
-        self.chk_particles = QCheckBox("✨ Partículas de Fluido (Animación)")
+        self.chk_particles = QCheckBox("✨ Partículas 3D (16 Planos)")
         self.chk_particles.setChecked(True)
         self.chk_particles.setStyleSheet("color: #38BDF8; font-weight: bold;")
+
+        self.chk_theo_shock = QCheckBox("🟢 Cono 3D Onda de Choque Translúcido")
+        self.chk_theo_shock.setChecked(True)
+        self.chk_theo_shock.setStyleSheet("color: #34D399; font-weight: bold;")
 
         self.chk_control_vol = QCheckBox("📦 Volumen de Control 3D")
         self.chk_control_vol.setChecked(True)
 
         self.chk_schlieren = QCheckBox("Plano Schlieren (|∇ρ|)")
         self.chk_schlieren.setChecked(True)
-
-        self.chk_theo_shock = QCheckBox("Choque Teórico Taylor-Maccoll")
-        self.chk_theo_shock.setChecked(True)
 
         self.chk_streamlines = QCheckBox("Streamlines (Mach)")
         self.chk_streamlines.setChecked(True)
@@ -196,9 +199,9 @@ class Viewport3DPanel(QWidget):
         self.chk_hotspot.setChecked(True)
 
         toolbar_row2.addWidget(self.chk_particles)
+        toolbar_row2.addWidget(self.chk_theo_shock)
         toolbar_row2.addWidget(self.chk_control_vol)
         toolbar_row2.addWidget(self.chk_schlieren)
-        toolbar_row2.addWidget(self.chk_theo_shock)
         toolbar_row2.addWidget(self.chk_streamlines)
         toolbar_row2.addWidget(self.chk_edges)
         toolbar_row2.addWidget(self.chk_hotspot)
@@ -275,7 +278,8 @@ class Viewport3DPanel(QWidget):
         """
         Lee el último directorio temporal de un caso de OpenFOAM mediante POpenFOAMReader,
         ejecuta los algoritmos de post-procesado (Aeroheating, Schlieren, Streamlines,
-        Volumen de Control 3D y Sistema Lagrangiano de Partículas) y renderiza en la GPU.
+        Cono 3D Translúcido de Onda de Choque, Volumen de Control 3D y Partículas en 16 planos)
+        y renderiza en la GPU.
         """
         self.anim_timer.stop()
 
@@ -292,9 +296,13 @@ class Viewport3DPanel(QWidget):
         multiblock = reader.read()
 
         internal_mesh = multiblock["internalMesh"]
-        xmin, xmax, ymin, ymax, zmin, zmax = internal_mesh.bounds
+        xmin, xmax, ymin, ymax, _, _ = internal_mesh.bounds
         self.domain_length_m = max(xmax, xmax - xmin)
         self.theo_shock_angle_deg = theo_shock_angle_deg
+        self.current_mach = mach_inf
+
+        boundary_keys = list(multiblock["boundary"].keys()) if "boundary" in multiblock.keys() else []
+        self.is_blunt_sphere = "sphere" in boundary_keys or "sphere" in case_path.name.lower()
 
         # 1. Extraer superficie térmica y de presión del vehículo y reconstruir 360° / 180°
         self.raw_surface_mesh, self.aero_metrics = extract_aeroheating_surface(
@@ -320,16 +328,34 @@ class Viewport3DPanel(QWidget):
         self.domain_bounds = (xmin, xmax, -rmax, rmax, -rmax, rmax)
         self.control_volume_mesh = build_control_volume_cylinder(self.domain_bounds)
 
-        # 4. Generar líneas de corriente 3D y Sistema Lagrangiano de Partículas
+        # 4. Construir la Superficie 3D Translúcida de la Onda de Choque
+        self.theo_shock_surface = None
+        if mach_inf > 1.05:
+            if self.is_blunt_sphere:
+                # Hiperboloide 3D de choque desprendido (Bow Shock de Billig)
+                bb_solver = BluntBodySolver()
+                self.theo_shock_surface = bb_solver.build_3d_bow_shock_surface(
+                    mach_inf=mach_inf,
+                    nose_radius_m=0.10,
+                    x_max_m=min(xmax, 0.28)
+                )
+            elif theo_shock_angle_deg is not None and theo_shock_angle_deg > 0.0:
+                # Cono 3D de onda de choque oblicua de Taylor-Maccoll
+                self.theo_shock_surface = build_3d_conical_shock_surface(
+                    shock_angle_deg=theo_shock_angle_deg,
+                    x_end_m=xmax
+                )
+
+        # 5. Generar líneas de corriente 3D y Sistema Lagrangiano de Partículas en 16 planos
         self.streamlines_mesh = generate_streamlines(
             internal_mesh=internal_mesh,
-            n_seeds=18,
+            n_seeds=20,
             mirror_symmetry=True
         )
         self.particle_system = LagrangianParticleSystem(
             streamlines_polydata=self.streamlines_mesh,
-            n_particles_per_track=8,
-            revolve_3d_azimuths=6
+            n_particles_per_track=10,
+            revolve_3d_azimuths=16
         )
 
         self.refresh_scene()
@@ -354,7 +380,7 @@ class Viewport3DPanel(QWidget):
                 self.control_volume_mesh,
                 style="wireframe",
                 color="#38BDF8",
-                opacity=0.22,
+                opacity=0.20,
                 line_width=1.0
             )
             self.plotter.show_bounds(
@@ -374,7 +400,7 @@ class Viewport3DPanel(QWidget):
                 self.schlieren_slice,
                 scalars="schlieren_log",
                 cmap="gist_yarg",
-                opacity=0.88,
+                opacity=0.86,
                 show_edges=show_edges,
                 edge_color="#64748B",
                 scalar_bar_args={
@@ -389,7 +415,7 @@ class Viewport3DPanel(QWidget):
                 }
             )
 
-        # 3. Superficie Sólida 3D del Vehículo (Cono 360° / Cohete)
+        # 3. Superficie Sólida 3D del Vehículo (Cono 360° / Esfera 360° / Cohete)
         if self.surface_mesh is not None:
             field_idx = self.combo_field.currentIndex()
             if field_idx == 0 and "T" in self.surface_mesh.point_data:
@@ -460,19 +486,21 @@ class Viewport3DPanel(QWidget):
                     specular_power=40
                 )
 
-        # 4. Generatrices Analíticas Superior e Inferior de Taylor-Maccoll (±β_TM)
-        if (
-            self.chk_theo_shock.isChecked()
-            and self.theo_shock_angle_deg is not None
-            and self.theo_shock_angle_deg > 0.0
-        ):
-            beta_rad = math.radians(self.theo_shock_angle_deg)
-            x_end = self.domain_length_m
-            y_end = x_end * math.tan(beta_rad)
-            shock_top = pv.Line((0.0, 0.0, 0.002), (x_end, y_end, 0.002))
-            shock_bot = pv.Line((0.0, 0.0, 0.002), (x_end, -y_end, 0.002))
-            self.plotter.add_mesh(shock_top, color="#10B981", line_width=3.5)
-            self.plotter.add_mesh(shock_bot, color="#10B981", line_width=3.5)
+        # 4. Superficie 3D Translúcida de la Onda de Choque (Cono Taylor-Maccoll o Bow Shock de Billig)
+        if self.chk_theo_shock.isChecked() and self.theo_shock_surface is not None:
+            self.plotter.add_mesh(
+                self.theo_shock_surface,
+                color="#10B981",
+                opacity=0.28,
+                smooth_shading=True,
+                specular=0.75,
+                specular_power=35,
+                show_edges=False
+            )
+            # Añadir también la intersección meridiana en Z=0 para máximo contraste sobre el Schlieren
+            shock_slice = self.theo_shock_surface.slice(normal=(0.0, 0.0, 1.0), origin=(0.0, 0.0, 0.0))
+            if shock_slice.n_points > 0:
+                self.plotter.add_mesh(shock_slice, color="#34D399", line_width=3.2)
 
         # 5. Líneas de Corriente Estáticas (Streamlines coloreadas por Mach)
         if (
@@ -485,7 +513,7 @@ class Viewport3DPanel(QWidget):
                 scalars="Mach",
                 cmap="plasma",
                 line_width=1.8,
-                opacity=0.65,
+                opacity=0.55,
                 scalar_bar_args={
                     "title": "Mach Local [-]",
                     "color": "white",
@@ -498,7 +526,7 @@ class Viewport3DPanel(QWidget):
                 }
             )
 
-        # 6. Nube 3D de Partículas de Fluido en Movimiento (Lagrangian Tracers)
+        # 6. Nube 3D de Partículas de Fluido en Movimiento (16 Planos Diametrales)
         if (
             self.chk_particles.isChecked()
             and self.particle_system is not None
@@ -509,7 +537,7 @@ class Viewport3DPanel(QWidget):
                 scalars="Mach",
                 cmap="plasma",
                 render_points_as_spheres=True,
-                point_size=8.5,
+                point_size=7.5,
                 show_scalar_bar=not self.chk_streamlines.isChecked(),
                 scalar_bar_args={
                     "title": "Mach Local [-]",

@@ -69,7 +69,7 @@ def extract_aeroheating_surface(
     de OpenFOAM, añade el coeficiente de presión Cp y calcula las métricas térmicas.
     """
     if target_patches is None:
-        target_patches = ["nose", "fuselage", "fins", "base", "cone"]
+        target_patches = ["nose", "fuselage", "fins", "base", "cone", "sphere"]
 
     if "boundary" not in multiblock_mesh.keys():
         raise ValueError("El objeto MultiBlock no contiene el bloque 'boundary' de OpenFOAM.")

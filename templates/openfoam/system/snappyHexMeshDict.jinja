@@ -1,0 +1,138 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2312                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      snappyHexMeshDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+castellatedMesh true;
+snap            true;
+addLayers       true;
+
+geometry
+{
+{% for patch in rocket_patches %}
+    {{ patch }}.stl
+    {
+        type triSurfaceMesh;
+        name {{ patch }};
+    }
+{% endfor %}
+
+    // Caja de refinamiento de onda de choque frontal y estela trasera (Wake Box)
+    wakeAndShockBox
+    {
+        type searchableBox;
+        min ({{ box_x_min }} 0.0 {{ box_z_min }});
+        max ({{ box_x_max }} {{ box_y_max }} {{ box_z_max }});
+    }
+}
+
+castellatedMeshControls
+{
+    maxLocalCells       800000;
+    maxGlobalCells      2500000;
+    minRefinementCells  10;
+    maxLoadUnbalance    0.10;
+    nCellsBetweenLevels 3;
+
+    features
+    (
+    );
+
+    refinementSurfaces
+    {
+{% for patch in rocket_patches %}
+        {{ patch }}
+        {
+            level (3 4);
+            patchInfo
+            {
+                type wall;
+            }
+        }
+{% endfor %}
+    }
+
+    resolveFeatureAngle 30;
+
+    refinementRegions
+    {
+        wakeAndShockBox
+        {
+            mode inside;
+            levels ((1E15 2));
+        }
+    }
+
+    locationInMesh ({{ loc_x }} {{ loc_y }} {{ loc_z }});
+    allowFreeStandingZoneFaces true;
+}
+
+snapControls
+{
+    nSmoothPatch    3;
+    tolerance       2.0;
+    nSolveIter      50;
+    nRelaxIter      5;
+}
+
+addLayersControls
+{
+    relativeSizes   true;
+    layers
+    {
+{% for patch in rocket_patches %}
+        "{{ patch }}"
+        {
+            nSurfaceLayers 4;
+        }
+{% endfor %}
+    }
+
+    expansionRatio              1.2;
+    finalLayerThickness         0.4;
+    minThickness                0.1;
+    nGrow                       0;
+    featureAngle                60;
+    nRelaxIter                  5;
+    nSmoothSurfaceNormals       1;
+    nSmoothNormals              3;
+    nSmoothThickness            10;
+    maxFaceThicknessRatio       0.5;
+    maxThicknessToMedialRatio   0.3;
+    minMedialAxisAngle          90;
+    nBufferCellsNoExtrude       0;
+    nLayerIter                  50;
+}
+
+meshQualityControls
+{
+    maxNonOrtho         65;
+    maxBoundarySkewness 20;
+    maxInternalSkewness 4;
+    maxConcave          80;
+    minVol              1e-13;
+    minTetQuality       1e-15;
+    minArea             -1;
+    minTwist            0.02;
+    minDeterminant      0.001;
+    minFaceWeight       0.05;
+    minVolRatio         0.01;
+    minTriangleTwist    -1;
+    nSmoothScale        4;
+    errorReduction      0.75;
+}
+
+mergeTolerance 1e-6;
+
+// ************************************************************************* //

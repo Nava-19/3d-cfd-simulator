@@ -99,17 +99,14 @@ Este documento establece la ruta crítica secuencial de desarrollo. Para maximiz
 - [ ] `5.2` **Exportar parches STL independientes en formato ASCII**
   - Exportar por separado: `nose.stl`, `fuselage.stl`, `fins.stl`, `base.stl`.
   - Verificar que las coordenadas coinciden en el mismo origen espacial y la escala está en metros.
-- [ ] `5.3` **Diseñar dominio exterior en `blockMeshDict`**
-  - Crear caja de túnel numérico: entrada a $5L$ aguas arriba, salida a $10L$ aguas abajo, radio $5L$.
-  - Cara longitudinal configurada como parche tipo `symmetryPlane`.
-- [ ] `5.4` **Configurar `snappyHexMeshDict` con refinamiento selectivo**
-  - Definir caja de refinamiento (refinement box) envolviendo el cohete y la estela.
-  - Refinamiento nivel alto en `nose` y bordes de ataque de `fins`.
-  - Refinamiento medio en `fuselage`.
-  - Configurar 3 a 5 capas prismáticas de inflación (`addLayers`) con factor de expansión $1.2$.
-- [ ] `5.5` **Validar calidad de malla (`checkMesh`)**
-  - Verificar que el número de celdas se mantiene entre $1.5\text{M}$ y $2.8\text{M}$ para respetar los 16 GB de RAM.
-  - Comprobar que `Max skewness < 4` y no hay caras no ortogonales graves.
+- [x] `5.3` **Diseñar dominio exterior en `blockMeshDict` (`templates/openfoam/system/blockMeshDict_rocket.jinja`)**
+  - Creado túnel numérico con entrada a $3L$ aguas arriba (captura de Bow Shock), salida a $8L$ aguas abajo (desarrollo completo de estela y base drag) y parche `symmetryPlane`.
+  - Añadido también dominio O-Grid polar para **Esfera Supersónica (`blockMeshDict_sphere.jinja`)** con región de choque desprendido y estela trasera ($4.5R$).
+- [x] `5.4` **Configurar `snappyHexMeshDict` con refinamiento selectivo (`templates/openfoam/system/snappyHexMeshDict.jinja`)**
+  - Definida caja de refinamiento `wakeAndShockBox` envolviendo el cohete y la estela.
+  - Configuradas 4 capas prismáticas de inflación (`addLayers`) con factor de expansión $1.2$.
+- [ ] `5.5` **Validar calidad de malla del cohete importado (`checkMesh`)**
+  - Verificar que el número de celdas de los STL del cohete se mantiene entre $1.5\text{M}$ y $2.8\text{M}$ para respetar los 16 GB de RAM.
 
 ---
 

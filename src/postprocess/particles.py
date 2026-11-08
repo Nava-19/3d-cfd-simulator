@@ -29,8 +29,8 @@ class LagrangianParticleSystem:
     def __init__(
         self,
         streamlines_polydata: pv.PolyData,
-        n_particles_per_track: int = 8,
-        revolve_3d_azimuths: int = 6
+        n_particles_per_track: int = 10,
+        revolve_3d_azimuths: int = 16
     ) -> None:
         self.tracks: list[TrajectoryTrack] = []
         self.n_particles_per_track = max(n_particles_per_track, 1)
@@ -107,8 +107,9 @@ class LagrangianParticleSystem:
         if not base_tracks:
             return
 
-        # Distribuir las trayectorias en el volumen 3D (planos azimutales alrededor del eje X)
-        azimuth_angles_deg = np.linspace(0.0, 360.0, revolve_3d_azimuths, endpoint=False)
+        # Distribuir las trayectorias en el volumen 3D (planos diametrales alrededor del eje X)
+        # Como base_tracks ya incluye +Y y -Y, barrer [0°, 180°) cubre los 360° sin solapar planos.
+        azimuth_angles_deg = np.linspace(0.0, 180.0, revolve_3d_azimuths, endpoint=False)
         for track in base_tracks:
             for phi_deg in azimuth_angles_deg:
                 phi_rad = math.radians(float(phi_deg))

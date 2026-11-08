@@ -1,11 +1,15 @@
 """
 Generador automatizado de casos de OpenFOAM para rhoCentralFoam.
 Utiliza Jinja2 para inyectar condiciones de vuelo calculadas por AtmosphereISA
-y parámetros geométricos en los diccionarios de OpenFOAM.
+y parámetros geométricos en los diccionarios de OpenFOAM:
+    1. Cono supersónico axisimétrico (Validación Taylor-Maccoll).
+    2. Esfera supersónica axisimétrica (Cuerpo romo con Bow Shock desprendido y estela).
+    3. Cohete lanzador 3D completo con parches STL y dominio de estela (snappyHexMesh).
 """
 
 import math
 from pathlib import Path
+import shutil
 from jinja2 import Environment, FileSystemLoader
 from src.physics.atmosphere import FlightCondition
 
@@ -15,7 +19,6 @@ class OpenFOAMCaseGenerator:
 
     def __init__(self, templates_dir: Path | str | None = None) -> None:
         if templates_dir is None:
-            # Directorio por defecto: templates/openfoam relativo a la raíz del proyecto
             self.templates_dir = Path(__file__).resolve().parent.parent.parent / "templates" / "openfoam"
         else:
             self.templates_dir = Path(templates_dir)
@@ -148,7 +151,6 @@ class OpenFOAMCaseGenerator:
             inviscid=True
         )
 
-        # Geometría de la cuña axisimétrica (+/- 2.5 grados alrededor del plano X-Y)
         wedge_half_rad = math.radians(2.5)
         theta_c_rad = math.radians(cone_angle_deg)
 
@@ -180,6 +182,173 @@ class OpenFOAMCaseGenerator:
             "system/blockMeshDict_cone.jinja",
             out_dir / "system" / "blockMeshDict",
             mesh_context
+        )
+
+        return out_dir
+
+    def generate_sphere_benchmark_case(
+        self,
+        output_case_dir: Path | str,
+        flight_cond: FlightCondition,
+        sphere_radius_m: float = 0.10,
+        n_theta_front: int = 60,
+        n_theta_wake: int = 60,
+        n_radial: int = 70,
+        end_time: float = 0.0035
+    ) -> Path:
+        """
+        Genera el caso canónico de una esfera supersónica (Blunt Body) con malla O-Grid polar.
+        Captura el choque en arco desprendido (Bow Shock) aguas arriba, la línea sónica
+        y el desarrollo de la estela supersónica aguas abajo.
+        """
+        out_dir = self.generate_case(
+            output_case_dir=output_case_dir,
+            flight_cond=flight_cond,
+            rocket_patches=["sphere"],
+            ref_length=2.0 * sphere_radius_m,
+            ref_area=math.pi * (sphere_radius_m ** 2),
+            end_time=end_time,
+            initial_delta_t=3e-7,
+            write_interval=250,
+            is_axisymmetric=True,
+            inviscid=True
+        )
+
+        wedge_half_rad = math.radians(2.5)
+        cos_w = math.cos(wedge_half_rad)
+        sin_w = math.sin(wedge_half_rad)
+
+        # Centro de la esfera en x = R para que el punto de remanso (proa) esté exactamente en x = 0.0
+        r_sph = sphere_radius_m
+        x_center = r_sph
+        x_nose = 0.0
+        x_tail = 2.0 * r_sph
+
+        # Dominio exterior: 2.0*R aguas arriba de la proa y 4.5*R aguas abajo en la estela
+        r_out_front = 3.0 * r_sph
+        r_out_top = 3.8 * r_sph
+        r_out_wake = 4.5 * r_sph
+
+        x_inlet = x_center - r_out_front
+        x_outlet = x_center + r_out_wake
+
+        # Puntos intermedios a 45° y 135° para los arcos de blockMesh
+        c45 = math.cos(math.radians(45.0))
+        s45 = math.sin(math.radians(45.0))
+
+        r_mid_front_out = 0.5 * (r_out_front + r_out_top)
+        r_mid_rear_out = 0.5 * (r_out_top + r_out_wake)
+
+        mesh_context = {
+            "x_nose": round(x_nose, 6),
+            "x_inlet": round(x_inlet, 6),
+            "x_center": round(x_center, 6),
+            "x_tail": round(x_tail, 6),
+            "x_outlet": round(x_outlet, 6),
+            "y_eq": round(r_sph * cos_w, 8),
+            "z_eq": round(r_sph * sin_w, 8),
+            "y_top": round(r_out_top * cos_w, 8),
+            "z_top": round(r_out_top * sin_w, 8),
+            "x_arc_front_wall": round(x_center - r_sph * c45, 8),
+            "y_arc_front_wall": round((r_sph * s45) * cos_w, 8),
+            "z_arc_front_wall": round((r_sph * s45) * sin_w, 8),
+            "x_arc_front_out": round(x_center - r_mid_front_out * c45, 8),
+            "y_arc_front_out": round((r_mid_front_out * s45) * cos_w, 8),
+            "z_arc_front_out": round((r_mid_front_out * s45) * sin_w, 8),
+            "x_arc_rear_wall": round(x_center + r_sph * c45, 8),
+            "y_arc_rear_wall": round((r_sph * s45) * cos_w, 8),
+            "z_arc_rear_wall": round((r_sph * s45) * sin_w, 8),
+            "x_arc_rear_out": round(x_center + r_mid_rear_out * c45, 8),
+            "y_arc_rear_out": round((r_mid_rear_out * s45) * cos_w, 8),
+            "z_arc_rear_out": round((r_mid_rear_out * s45) * sin_w, 8),
+            "n_theta_front": n_theta_front,
+            "n_theta_wake": n_theta_wake,
+            "n_radial": n_radial,
+            "radial_grading": 2.5
+        }
+
+        self._render_template(
+            "system/blockMeshDict_sphere.jinja",
+            out_dir / "system" / "blockMeshDict",
+            mesh_context
+        )
+
+        return out_dir
+
+    def generate_rocket_stl_case(
+        self,
+        output_case_dir: Path | str,
+        flight_cond: FlightCondition,
+        stl_files: list[Path] | None = None,
+        rocket_length_m: float = 1.0,
+        rocket_radius_m: float = 0.08,
+        end_time: float = 0.02
+    ) -> Path:
+        """
+        Prepara el caso 3D completo del cohete lanzador con un amplio dominio aguas arriba (3*L)
+        para el Bow Shock de la ojiva redondeada y aguas abajo (8*L) para el desarrollo de la estela.
+        Copia los archivos STL a constant/triSurface/ y genera blockMeshDict y snappyHexMeshDict.
+        """
+        patches = [p.stem for p in stl_files] if stl_files else ["nose", "fuselage", "fins", "base"]
+
+        out_dir = self.generate_case(
+            output_case_dir=output_case_dir,
+            flight_cond=flight_cond,
+            rocket_patches=patches,
+            ref_length=rocket_length_m,
+            ref_area=math.pi * (rocket_radius_m ** 2),
+            end_time=end_time,
+            initial_delta_t=1e-7,
+            write_interval=250,
+            is_axisymmetric=False,
+            inviscid=False
+        )
+
+        tri_dir = out_dir / "constant" / "triSurface"
+        tri_dir.mkdir(parents=True, exist_ok=True)
+        if stl_files:
+            for stl_path in stl_files:
+                if stl_path.exists():
+                    shutil.copy2(stl_path, tri_dir / stl_path.name)
+
+        # Túnel numérico con 3*L aguas arriba y 8*L aguas abajo para capturar la estela completa
+        x_min = -3.0 * rocket_length_m
+        x_max = 8.0 * rocket_length_m
+        y_max = 4.0 * rocket_length_m
+        z_min = -4.0 * rocket_length_m
+        z_max = 4.0 * rocket_length_m
+
+        block_ctx = {
+            "x_min": round(x_min, 4),
+            "x_max": round(x_max, 4),
+            "y_max": round(y_max, 4),
+            "z_min": round(z_min, 4),
+            "z_max": round(z_max, 4),
+            "nx": 88,
+            "ny": 32,
+            "nz": 64,
+        }
+        self._render_template(
+            "system/blockMeshDict_rocket.jinja",
+            out_dir / "system" / "blockMeshDict",
+            block_ctx
+        )
+
+        snappy_ctx = {
+            "rocket_patches": patches,
+            "box_x_min": round(-0.5 * rocket_length_m, 4),
+            "box_x_max": round(4.5 * rocket_length_m, 4),
+            "box_y_max": round(0.8 * rocket_length_m, 4),
+            "box_z_min": round(-0.8 * rocket_length_m, 4),
+            "box_z_max": round(0.8 * rocket_length_m, 4),
+            "loc_x": round(-1.5 * rocket_length_m, 4),
+            "loc_y": round(1.5 * rocket_length_m, 4),
+            "loc_z": 0.0,
+        }
+        self._render_template(
+            "system/snappyHexMeshDict.jinja",
+            out_dir / "system" / "snappyHexMeshDict",
+            snappy_ctx
         )
 
         return out_dir

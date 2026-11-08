@@ -1,0 +1,136 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2312                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      blockMeshDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+scale   1;
+
+// Malla polar O-Grid axisimétrica en cuña (+/- 2.5°) alrededor de una esfera de radio R
+// Bloque 0: Zona de choque desprendido (Bow Shock) y hemisferio frontal (theta: 0° -> 90°)
+// Bloque 1: Hemisferio posterior y estela supersónica aguas abajo (theta: 90° -> 180°)
+
+vertices
+(
+    // Eje de simetría aguas arriba (theta = 0°, r = 0)
+    ({{ x_nose }}      0.0  0.0)                      // 0: Polo frontal esfera (remanso)
+    ({{ x_inlet }}     0.0  0.0)                      // 1: Entrada en eje de simetría
+
+    // Ecuador de la esfera y frontera superior (theta = 90°, x = x_center)
+    // Cara trasera de la cuña (-z)
+    ({{ x_center }}    {{ y_eq }}   -{{ z_eq }})      // 2: Ecuador esfera (-z)
+    ({{ x_center }}    {{ y_top }}  -{{ z_top }})     // 3: Frontera exterior superior (-z)
+
+    // Cara delantera de la cuña (+z)
+    ({{ x_center }}    {{ y_eq }}    {{ z_eq }})      // 4: Ecuador esfera (+z)
+    ({{ x_center }}    {{ y_top }}   {{ z_top }})     // 5: Frontera exterior superior (+z)
+
+    // Eje de simetría aguas abajo en la estela (theta = 180°, r = 0)
+    ({{ x_tail }}      0.0  0.0)                      // 6: Polo posterior esfera (base)
+    ({{ x_outlet }}    0.0  0.0)                      // 7: Salida de estela en eje de simetría
+);
+
+blocks
+(
+    // Bloque 0: Hemisferio frontal y región de Bow Shock (theta: 0° -> 90°)
+    hex (0 2 3 1 0 4 5 1) ({{ n_theta_front }} {{ n_radial }} 1) simpleGrading (1 {{ radial_grading }} 1)
+
+    // Bloque 1: Hemisferio posterior y región de estela (theta: 90° -> 180°)
+    hex (2 6 7 3 4 6 7 5) ({{ n_theta_wake }} {{ n_radial }} 1) simpleGrading (1 {{ radial_grading }} 1)
+);
+
+edges
+(
+    // Arcos de la superficie esférica frontal (theta = 45°)
+    arc 0 2 ({{ x_arc_front_wall }} {{ y_arc_front_wall }} -{{ z_arc_front_wall }})
+    arc 0 4 ({{ x_arc_front_wall }} {{ y_arc_front_wall }}  {{ z_arc_front_wall }})
+
+    // Arcos de la frontera exterior de entrada (theta = 45°)
+    arc 1 3 ({{ x_arc_front_out }}  {{ y_arc_front_out }}  -{{ z_arc_front_out }})
+    arc 1 5 ({{ x_arc_front_out }}  {{ y_arc_front_out }}   {{ z_arc_front_out }})
+
+    // Arcos de la superficie esférica posterior (theta = 135°)
+    arc 2 6 ({{ x_arc_rear_wall }}  {{ y_arc_rear_wall }}  -{{ z_arc_rear_wall }})
+    arc 4 6 ({{ x_arc_rear_wall }}  {{ y_arc_rear_wall }}   {{ z_arc_rear_wall }})
+
+    // Arcos de la frontera exterior de estela/salida (theta = 135°)
+    arc 3 7 ({{ x_arc_rear_out }}   {{ y_arc_rear_out }}   -{{ z_arc_rear_out }})
+    arc 5 7 ({{ x_arc_rear_out }}   {{ y_arc_rear_out }}    {{ z_arc_rear_out }})
+);
+
+boundary
+(
+    inlet
+    {
+        type            patch;
+        faces
+        (
+            (1 3 5 1)
+        );
+    }
+
+    outlet
+    {
+        type            patch;
+        faces
+        (
+            (3 7 7 5)
+        );
+    }
+
+    sphere
+    {
+        type            wall;
+        faces
+        (
+            (0 2 4 0)
+            (2 6 6 4)
+        );
+    }
+
+    wedge_back
+    {
+        type            wedge;
+        faces
+        (
+            (0 1 3 2)
+            (2 3 7 6)
+        );
+    }
+
+    wedge_front
+    {
+        type            wedge;
+        faces
+        (
+            (0 4 5 1)
+            (4 6 7 5)
+        );
+    }
+
+    axis
+    {
+        type            empty;
+        faces
+        (
+            (0 0 1 1)
+            (6 6 7 7)
+        );
+    }
+);
+
+mergePatchPairs
+(
+);
+
+// ************************************************************************* //

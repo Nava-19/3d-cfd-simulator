@@ -1,11 +1,11 @@
 """
-Ventana Principal de la Estación de Simulación CFD 3D (Fase 8.1).
+Ventana Principal de la Estación de Simulación CFD 3D (Fase 8.1 y 8.5).
 Orquesta la comunicación reactiva (Señales y Slots Qt) entre:
-    - FlightControlPanel (Atmósfera ISA 1976 + Controles de Vuelo)
+    - FlightControlPanel (Atmósfera ISA 1976 + Selector Cono / Esfera / Cohete STL)
     - OpenFOAMRunner (Ejecución asíncrona en WSL2 en hilo QThread independiente)
     - TelemetryPlotsPanel (Gráficas PyQtGraph en tiempo real)
-    - Viewport3DPanel (Motor de renderizado 3D GPU PyVista/VTK)
-    - SupersonicConeBenchmark & AeroDBExporter (Validación analítica y exportación GNC)
+    - Viewport3DPanel (Motor de renderizado 3D GPU PyVista/VTK con Cono de Choque y Partículas)
+    - SupersonicConeBenchmark, BluntBodySolver & AeroDBExporter
 """
 
 from pathlib import Path
@@ -26,6 +26,7 @@ from src.backend.runner import OpenFOAMRunner
 from src.gui.control_panel import FlightControlPanel
 from src.gui.plots_panel import TelemetryPlotsPanel
 from src.gui.viewport_panel import Viewport3DPanel
+from src.physics.blunt_body import BluntBodySolver
 from src.physics.taylor_maccoll import TaylorMaccollSolver
 from src.postprocess.aerodb_exporter import AeroDBExporter, AeroDBRecord
 from src.validation.cone_benchmark import SupersonicConeBenchmark
@@ -112,7 +113,7 @@ class CFDMainWindow(QMainWindow):
         self.setWindowTitle(
             "Simulador CFD 3D Compresible — Aerodinámica & Aeroheating de Cohetes (OpenFOAM v2312 + PyVista)"
         )
-        self.resize(1540, 920)
+        self.resize(1560, 940)
         self.setStyleSheet(DARK_AEROSPACE_STYLESHEET)
 
         self.project_root = Path(__file__).resolve().parent.parent.parent
@@ -120,12 +121,13 @@ class CFDMainWindow(QMainWindow):
         self.runner: OpenFOAMRunner | None = None
         self.benchmark = SupersonicConeBenchmark()
         self.tm_solver = TaylorMaccollSolver()
+        self.bb_solver = BluntBodySolver()
         self.case_generator = OpenFOAMCaseGenerator()
 
         self._build_layout(off_screen=off_screen)
         self._connect_signals()
 
-        # Si el caso validado benchmark_cone_m2 ya existe en disco, cargarlo al iniciar
+        # Cargar el caso validado benchmark_cone_m2 al iniciar
         default_bench = self.project_root / "cases" / "benchmark_cone_m2"
         if (default_bench / "0.003").exists() or len(list(default_bench.glob("0.*"))) > 0:
             self.load_case_directory(default_bench)
@@ -136,12 +138,11 @@ class CFDMainWindow(QMainWindow):
         root_layout = QVBoxLayout(central)
         root_layout.setContentsMargins(6, 6, 6, 6)
 
-        # Splitter Horizontal Principal: [Panel Izquierdo | Área Derecha (Visor 3D + Gráficas)]
         self.main_splitter = QSplitter(Qt.Orientation.Horizontal)
 
         self.control_panel = FlightControlPanel(self)
-        self.control_panel.setMinimumWidth(320)
-        self.control_panel.setMaximumWidth(390)
+        self.control_panel.setMinimumWidth(330)
+        self.control_panel.setMaximumWidth(400)
 
         self.right_splitter = QSplitter(Qt.Orientation.Vertical)
         self.viewport_panel = Viewport3DPanel(self, off_screen=off_screen)
@@ -159,11 +160,10 @@ class CFDMainWindow(QMainWindow):
 
         root_layout.addWidget(self.main_splitter)
 
-        # Barra de Estado Inferior
         status_bar = QStatusBar(self)
         self.setStatusBar(status_bar)
 
-        self.lbl_status = QLabel("Listo. Seleccione condiciones de vuelo o inspeccione el caso en 3D.")
+        self.lbl_status = QLabel("Listo. Seleccione Cono, Esfera o Cohete 3D.")
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
@@ -183,6 +183,7 @@ class CFDMainWindow(QMainWindow):
         cond = config["flight_condition"]
         mode = config["mode"]
         cone_angle = config["cone_angle_deg"]
+        stl_files = config.get("stl_files", [])
 
         self.plots_panel.clear_telemetry()
         self.progress_bar.setValue(0)
@@ -197,7 +198,7 @@ class CFDMainWindow(QMainWindow):
             )
             self.active_case_dir = out_dir
             self.plots_panel.append_log_line(
-                f"=== MODO VALIDACIÓN TAYLOR-MACCOLL (M={cond.mach:.2f}, θc={cone_angle:.1f}°) ===\n"
+                f"=== MODO 1: CONO SUPERSÓNICO TAYLOR-MACCOLL (M={cond.mach:.2f}, θc={cone_angle:.1f}°) ===\n"
                 f" -> Ángulo de Onda de Choque Analítico (β_TM): {tm_res.shock_angle_deg:.3f}°\n"
                 f" -> Salto de Presión Exacto (pc/p∞):           {tm_res.pressure_ratio_surface:.4f}\n"
                 f" -> Mach en Superficie Exacto (Mc):            {tm_res.mach_surface:.4f}\n"
@@ -205,17 +206,39 @@ class CFDMainWindow(QMainWindow):
             flow_transit = 0.5 / cond.velocity_magnitude_m_s
             end_time = round(4.0 * flow_transit, 5)
             run_blockmesh = True
-        else:
-            case_name = f"rocket_m{cond.mach:.2f}_h{cond.altitude_m:.0f}_a{cond.alpha_deg:.1f}".replace(".", "p")
+
+        elif mode == "sphere":
+            case_name = f"sphere_m{cond.mach:.2f}".replace(".", "p")
             case_dir = self.project_root / "cases" / case_name
-            end_time = 0.02
-            out_dir = self.case_generator.generate_case(
+            end_time = 0.0025
+            out_dir = self.case_generator.generate_sphere_benchmark_case(
                 output_case_dir=case_dir,
                 flight_cond=cond,
                 end_time=end_time
             )
             self.active_case_dir = out_dir
-            run_blockmesh = (out_dir / "system" / "blockMeshDict").exists()
+            if cond.mach > 1.0:
+                bb_res = self.bb_solver.solve(mach_inf=cond.mach, nose_radius_m=0.10)
+                self.plots_panel.append_log_line(
+                    f"=== MODO 2: ESFERA SUPERSÓNICA — BOW SHOCK DESPRENDIDO (M={cond.mach:.2f}) ===\n"
+                    f" -> Distancia de Desprendimiento (Standoff Δ): {bb_res.standoff_distance_m * 1000:.2f} mm\n"
+                    f" -> Presión Remanso Rayleigh-Pitot (p02/p∞):   {bb_res.stagnation_pressure_ratio:.4f}\n"
+                    f" -> Coeficiente Presión Máximo (Cp,max):       {bb_res.cp_stagnation_max:.4f}\n"
+                )
+            run_blockmesh = True
+
+        else:
+            case_name = f"rocket_m{cond.mach:.2f}_h{cond.altitude_m:.0f}_a{cond.alpha_deg:.1f}".replace(".", "p")
+            case_dir = self.project_root / "cases" / case_name
+            end_time = 0.02
+            out_dir = self.case_generator.generate_rocket_stl_case(
+                output_case_dir=case_dir,
+                flight_cond=cond,
+                stl_files=stl_files,
+                end_time=end_time
+            )
+            self.active_case_dir = out_dir
+            run_blockmesh = True
 
         self.control_panel.set_running_state(True)
         self.runner = OpenFOAMRunner(
@@ -258,23 +281,20 @@ class CFDMainWindow(QMainWindow):
         self.active_case_dir = cpath
         self.lbl_status.setText(f"Cargando resultados 3D desde {cpath.name}...")
 
-        # 1. Poblar gráficas de convergencia y fuerzas desde los logs
         self.plots_panel.load_history_from_case(cpath)
 
-        # 2. Calcular ángulo teórico de Taylor-Maccoll si estamos en modo validación supersónica
         cond = self.control_panel.current_condition
         assert cond is not None
         theo_beta: float | None = None
         cone_angle = self.control_panel.spin_cone_angle.value()
 
-        if cond.mach > 1.15:
+        if cond.mach > 1.15 and "sphere" not in cpath.name.lower():
             try:
                 tm_res = self.tm_solver.solve(mach_inf=cond.mach, cone_angle_deg=cone_angle)
                 theo_beta = tm_res.shock_angle_deg
             except ValueError:
                 theo_beta = None
 
-        # 3. Renderizar escena 3D en el visor PyVista
         try:
             aero_metrics = self.viewport_panel.load_openfoam_case(
                 case_dir=cpath,
@@ -292,7 +312,6 @@ class CFDMainWindow(QMainWindow):
                 f" -> Coordenada Punto Caliente (x, y, z):    {aero_metrics.hotspot_coordinates_m}\n"
             )
 
-            # Si es un caso de cono, ejecutar evaluación cuantitativa frente a Taylor-Maccoll
             if "cone" in cpath.name.lower() and cond.mach > 1.2:
                 report = self.benchmark.evaluate_cfd_results(
                     case_dir=cpath,
@@ -300,6 +319,14 @@ class CFDMainWindow(QMainWindow):
                     cone_angle_deg=cone_angle
                 )
                 self.plots_panel.append_log_line("\n" + report.to_markdown_table())
+            elif "sphere" in cpath.name.lower() and cond.mach > 1.0:
+                bb_res = self.bb_solver.solve(mach_inf=cond.mach, nose_radius_m=0.10)
+                self.plots_panel.append_log_line(
+                    f"\n### Análisis Teórico de Choque Desprendido (Bow Shock — Billig 1967)\n"
+                    f"- **Distancia de Desprendimiento ($\\Delta$):** `{bb_res.standoff_distance_m * 1000:.2f} mm` (vértice en $x = {-bb_res.standoff_distance_m:.4f}$ m)\n"
+                    f"- **Salto de Presión de Remanso Rayleigh-Pitot ($p_{{0,2}} / p_\\infty$):** `{bb_res.stagnation_pressure_ratio:.4f}`\n"
+                    f"- **Coeficiente de Presión Máximo ($C_{{p,max}}$):** `{bb_res.cp_stagnation_max:.4f}`\n"
+                )
 
             self.progress_bar.setValue(100)
             self.lbl_status.setText(
