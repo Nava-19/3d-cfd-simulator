@@ -4,11 +4,9 @@ venv/
 __pycache__/
 *.pyc
 
-# OpenFOAM temporales y resultados pesados
-cases/*/processor*
-cases/*/postProcessing/
-cases/*/[0-9]*
-!cases/*/[0-9]*.orig
+# OpenFOAM casos generados, temporales y resultados pesados
+cases/
+*.foam
 *.log
 
 # VTK y renders temporales

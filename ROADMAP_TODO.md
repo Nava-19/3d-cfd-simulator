@@ -81,14 +81,13 @@ Este documento establece la ruta crítica secuencial de desarrollo. Para maximiz
 - [x] `4.1` **Implementar solver analítico de choque cónico exacto (`src/physics/taylor_maccoll.py`)**
   - EDOs no lineales de Taylor-Maccoll resueltas con `solve_ivp` y búsqueda acotada de la solución de choque débil con `brentq`.
   - Tests unitarios pasando al 100% (`tests/test_taylor_maccoll.py`) con ángulos de choque y saltos de presión exactos de NACA 1135.
-- [ ] `4.2` **Crear caso benchmark de cono supersónico en OpenFOAM**
-  - Crear cono analítico en STL o con `blockMesh`.
-  - Mallar con refinamiento zonal.
-- [ ] `4.3` **Ejecutar simulación del cono con `rhoCentralFoam`**
-  - Correr caso en WSL2 hasta convergencia de residuos.
-- [ ] `4.4` **Crear script de extracción y comparación de choque (`src/validation/compare_benchmark.py`)**
-  - Extraer gradiente de densidad $|\nabla \rho|$ y presión en pared de los resultados CFD.
-  - Calcular la desviación porcentual respecto a la teoría de Taylor-Maccoll (debe ser $< 3\%$).
+- [x] `4.2` **Crear caso benchmark de cono supersónico en OpenFOAM (`templates/openfoam/system/blockMeshDict_cone.jinja`)**
+  - Malla estructurada axisimétrica en cuña de $5^\circ$ ($\pm 2.5^\circ$) de 11.200 celdas con eje colapsado en $r=0$ para cono de $\theta_c = 15^\circ$.
+- [x] `4.3` **Ejecutar simulación del cono con `rhoCentralFoam`**
+  - Simulación ejecutada en WSL2 a Mach 2.0 hasta estado estacionario ($t = 0.003\text{ s}$).
+- [x] `4.4` **Crear módulo de extracción y comparación de choque (`src/validation/cone_benchmark.py`)**
+  - Lectura nativa con `pyvista.POpenFOAMReader`: error de presión en pared `0.01%`, error de Mach superficial `0.45%` y error de ángulo de onda de choque `1.39%` frente a Taylor-Maccoll.
+  - Tests de integración pasando en `tests/test_cone_benchmark.py`.
 
 ---
 

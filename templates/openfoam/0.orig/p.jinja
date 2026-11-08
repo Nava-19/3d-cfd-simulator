@@ -29,11 +29,7 @@ boundaryField
 
     outlet
     {
-        type            waveTransmissive;
-        gamma           1.4;
-        field           p;
-        lInf            5.0;
-        value           uniform {{ p_inf }};
+        type            zeroGradient;
     }
 
     farfield
@@ -42,10 +38,27 @@ boundaryField
         value           uniform {{ p_inf }};
     }
 
+    {% if is_axisymmetric %}
+    axis
+    {
+        type            empty;
+    }
+
+    wedge_front
+    {
+        type            wedge;
+    }
+
+    wedge_back
+    {
+        type            wedge;
+    }
+    {% else %}
     symmetry
     {
         type            symmetryPlane;
     }
+    {% endif %}
 
     {% for patch in rocket_patches %}
     {{ patch }}

@@ -19,7 +19,7 @@ thermoType
 {
     type            hePsiThermo;
     mixture         pureMixture;
-    transport       sutherland;
+    transport       {% if inviscid %}const{% else %}sutherland{% endif %};
     thermo          hConst;
     equationOfState perfectGas;
     specie          specie;
@@ -34,13 +34,18 @@ mixture
     }
     thermodynamics
     {
-        Cp          1005;
+        Cp          1004.5;
         Hf          0;
     }
     transport
     {
+        {% if inviscid %}
+        mu          0;
+        Pr          1;
+        {% else %}
         As          1.458e-06;
         Ts          110.4;
+        {% endif %}
     }
 }
 

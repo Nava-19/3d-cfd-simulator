@@ -29,9 +29,7 @@ boundaryField
 
     outlet
     {
-        type            inletOutlet;
-        inletValue      uniform (0 0 0);
-        value           uniform ({{ ux }} {{ uy }} {{ uz }});
+        type            zeroGradient;
     }
 
     farfield
@@ -40,15 +38,32 @@ boundaryField
         value           uniform ({{ ux }} {{ uy }} {{ uz }});
     }
 
+    {% if is_axisymmetric %}
+    axis
+    {
+        type            empty;
+    }
+
+    wedge_front
+    {
+        type            wedge;
+    }
+
+    wedge_back
+    {
+        type            wedge;
+    }
+    {% else %}
     symmetry
     {
         type            symmetryPlane;
     }
+    {% endif %}
 
     {% for patch in rocket_patches %}
     {{ patch }}
     {
-        type            noSlip;
+        type            {% if inviscid %}slip{% else %}noSlip{% endif %};
     }
     {% endfor %}
 }
