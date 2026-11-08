@@ -17,3 +17,8 @@ cases/*/[0-9]*
 *.png
 *.jpg
 *.pdf
+
+# Configuración local de asistente / reglas internas
+.antigravityrules
+.antigravity/
+
