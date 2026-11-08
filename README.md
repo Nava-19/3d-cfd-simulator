@@ -5,10 +5,13 @@
 [![GUI](https://img.shields.io/badge/GUI-PyQt6%20%7C%20PyVista%20%7C%20VTK-orange.svg)](https://pyvista.org/)
 [![Tests](https://img.shields.io/badge/Tests-25%20Passed-brightgreen.svg)](tests/)
 [![Architecture](https://img.shields.io/badge/Architecture-Asynchronous%20QThread-purple.svg)]()
+[![Technical Reference](https://img.shields.io/badge/Docs-Technical%20Reference-informational.svg)](docs/TECHNICAL_REFERENCE.md)
 
 Industrial-grade, automated computational fluid dynamics (CFD) pipeline designed for 3D rocket aerodynamics and aerodynamic heating across transonic and supersonic regimes (Mach 0.2 to 3.5+).
 
 Orchestrates **OpenFOAM (`rhoCentralFoam`)** in WSL2 through a decoupled Python backend, providing real-time convergence telemetry via `PyQtGraph` and GPU-accelerated 3D rendering with `PyVista`/`VTK`.
+
+> 📖 **Engineering Documentation:** For the complete mathematical derivations, governing Navier-Stokes equations, Kurganov shock-capturing schemes, Taylor-Maccoll and Billig analytical ground-truth models, and validation benchmarks, see the [**Technical Reference (`docs/TECHNICAL_REFERENCE.md`)**](docs/TECHNICAL_REFERENCE.md).
 
 ---
 
