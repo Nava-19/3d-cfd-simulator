@@ -166,6 +166,10 @@ Este documento establece la ruta crítica secuencial de desarrollo. Para maximiz
   - Integrado `QtInteractor` (`QVTKRenderWindowInteractor`) en el centro de la ventana.
   - Barra de herramientas 3D: conmutadores para Temperatura de Pared, $C_p$, Presión, Malla Wireframe, Plano Schlieren ($|\nabla \rho|$), Generatriz Analítica de Choque de Taylor-Maccoll y Streamlines 3D.
   - Suite completa de pruebas de integración (`tests/test_postprocess.py` y `tests/test_gui.py`) pasando al 100% (24/24 tests passing).
+- [ ] `8.5` **Mejoras Visuales Cinemáticas y de Dominio 3D (Pendiente)**
+  - Conmutador de cuerpo completo $360^\circ$ con deslizador de opacidad / transparencia para no perder las ondas interiores.
+  - Renderizado del volumen de control exterior (caja del dominio numérico y límites físicos).
+  - Animación en tiempo real de partículas de fluido (Streaklines / Particle Tracers a 60 FPS con `QTimer`) mostrando el flujo dinámico.
 
 ---
 
