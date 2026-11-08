@@ -6,7 +6,7 @@
 [![Tests](https://img.shields.io/badge/Tests-25%20Passed-brightgreen.svg)](tests/)
 [![Architecture](https://img.shields.io/badge/Architecture-Asynchronous%20QThread-purple.svg)]()
 
-Industrial-grade, automated computational fluid dynamics (CFD) pipeline designed for 3D rocket aerodynamics and aerodynamic heating across transonic and supersonic regimes ($\text{Mach } 0.2 \to 3.5+$).
+Industrial-grade, automated computational fluid dynamics (CFD) pipeline designed for 3D rocket aerodynamics and aerodynamic heating across transonic and supersonic regimes (Mach 0.2 to 3.5+).
 
 Orchestrates **OpenFOAM (`rhoCentralFoam`)** in WSL2 through a decoupled Python backend, providing real-time convergence telemetry via `PyQtGraph` and GPU-accelerated 3D rendering with `PyVista`/`VTK`.
 
@@ -16,7 +16,7 @@ Orchestrates **OpenFOAM (`rhoCentralFoam`)** in WSL2 through a decoupled Python 
 
 ![Supersonic Sphere Bow Shock & Wake CFD Demo](docs/media/demo_sphere_bow_shock.gif)
 
-*Figure: Interactive 3D compressible CFD simulation showing a supersonic blunt body ($\text{Mach } 2.0$ sphere) with detached bow shock, numerical Schlieren gradient field ($|\nabla \rho|$), physical recirculation wake, and Lagrangian particle tracking across 16 diametral planes in PyVista/VTK.*
+*Figure: Interactive 3D compressible CFD simulation showing a supersonic blunt body (Mach 2.0 sphere) with detached bow shock, numerical Schlieren gradient field (|∇ρ|), physical recirculation wake, and Lagrangian particle tracking across 16 diametral planes in PyVista/VTK.*
 
 ---
 
@@ -37,10 +37,10 @@ Orchestrates **OpenFOAM (`rhoCentralFoam`)** in WSL2 through a decoupled Python 
 
 4. **Asynchronous Execution & Live Telemetry**
    - Non-blocking `QThread` worker managing WSL2 subprocess execution with streaming stdout parsing.
-   - Regex-powered real-time residual extraction ($p$, $U_x$, $U_y$, $e$, $k$, $\omega$, $\text{Courant}_{max}$) feeding live high-FPS plots.
+   - Regex-powered real-time residual extraction ($p$, $U_x$, $U_y$, $e$, $k$, $\omega$, $\text{CFL}_{max}$) feeding live high-FPS plots.
 
 5. **Advanced Post-Processing & 3D Visualization**
-   - Numerical Schlieren imaging ($|\nabla \rho|$) for oblique shock wave and expansion fan identification.
+   - Numerical Schlieren imaging (|∇ρ|) for oblique shock wave and expansion fan identification.
    - 3D surface aeroheating maps ($T_w = T_{rec}$) on rocket skin.
    - 3D streamtracer particle lines colored by local Mach number.
 
@@ -80,13 +80,13 @@ Orchestrates **OpenFOAM (`rhoCentralFoam`)** in WSL2 through a decoupled Python 
 
 ## 📊 Physical Validation: OpenFOAM (`rhoCentralFoam`) vs. Exact Taylor-Maccoll Theory
 
-Canonical axisymmetric supersonic cone benchmark ($\theta_c = 15.0^\circ$, $M_\infty = 2.00$, $11,200$-cell structured wedge mesh):
+Canonical axisymmetric supersonic cone benchmark ($\theta_c = 15.0^\circ$, $M_\infty = 2.00$, 11,200-cell structured wedge mesh):
 
 | Physical Quantity | Taylor-Maccoll (Analytical) | OpenFOAM (`rhoCentralFoam`) | Relative Error (%) |
 | :--- | :---: | :---: | :---: |
-| **Oblique Shock Wave Angle ($\beta$)** | `33.915°` | `34.387°` | **`1.39%`** |
-| **Surface Pressure Ratio ($p_c / p_\infty$)** | `1.5699` | `1.5701` | **`0.01%`** |
-| **Surface Mach Number ($M_c$)** | `1.7069` | `1.7146` | **`0.45%`** |
+| **Oblique Shock Wave Angle (β)** | `33.915°` | `34.387°` | **`1.39%`** |
+| **Surface Pressure Ratio (pc / p∞)** | `1.5699` | `1.5701` | **`0.01%`** |
+| **Surface Mach Number (Mc)** | `1.7069` | `1.7146` | **`0.45%`** |
 
 ---
 
