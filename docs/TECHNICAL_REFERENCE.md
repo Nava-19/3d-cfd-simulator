@@ -10,10 +10,9 @@
 > runs" — and to provide a single source of truth for anyone reviewing,
 > extending, or validating the simulation.
 >
-> This system also serves as the direct computational fluid dynamics (CFD)
-> companion to the [`orbital-mission-planner`](https://github.com/Nava-19/orbital-mission-planner)
-> trajectory simulator, replacing constant drag approximations with Mach-,
-> altitude-, and angle-of-attack-dependent aerodynamic and thermal databases (`AeroDB`).
+> This system generates comprehensive Mach-, altitude-, and angle-of-attack-dependent
+> aerodynamic and thermal databases (`AeroDB`), replacing idealized drag approximations
+> with high-fidelity compressible Navier-Stokes solutions across the launch envelope.
 
 ---
 
@@ -48,7 +47,7 @@ The simulator operates in a right-handed **three-dimensional body-fixed Cartesia
 | $+X$ axis (Axial / Roll) | Directed aft along the vehicle centerline (streamwise direction at $\alpha = 0^\circ$) |
 | $+Y$ axis (Normal / Yaw-Pitch plane) | Directed upward in the longitudinal symmetry plane (normal force direction) |
 | $+Z$ axis (Lateral / Pitch axis) | Completes the right-handed triad ($\hat{x} \times \hat{y} = \hat{z}$); pitch moment $M_z$ axis |
-| State variables | $[\rho, \; u_x, \; u_y, \; u_z, \; p, \; T, \; e, \; k, \; \omega]$ |
+| State variables | $[\rho, u_x, u_y, u_z, p, T, e, k, \omega]$ |
 
 **Freestream velocity decomposition** (from `src/physics/atmosphere.py`):
 
@@ -62,9 +61,9 @@ Three distinct domain topologies are implemented via Jinja2 dictionary templates
 
 | Mode | Template | Geometry Type | Domain Extent | Symmetry Assumption |
 |---|---|---|---|---|
-| **Mode 1: Supersonic Cone** | `blockMeshDict_cone.jinja` | $5^\circ$ axisymmetric wedge ($\theta_w = \pm 2.5^\circ$) | $x \in [-0.1, \; 0.5]$ m, $r \in [0, \; 0.4]$ m | Rotational periodicity ($\partial/\partial\phi = 0$); exact for $\alpha = 0^\circ$ |
+| **Mode 1: Supersonic Cone** | `blockMeshDict_cone.jinja` | $5^\circ$ axisymmetric wedge ($\theta_w = \pm 2.5^\circ$) | $x \in [-0.1, 0.5]$ m, $r \in [0, 0.4]$ m | Rotational periodicity ($\partial/\partial\phi = 0$); exact for $\alpha = 0^\circ$ |
 | **Mode 2: Blunt Sphere** | `blockMeshDict_sphere.jinja` | $5^\circ$ polar O-Grid wedge around $R = 0.10$ m | Upstream $-3R$, radial $4R$, downstream wake $+4.5R$ | Axisymmetric detached bow shock and toroidal recirculation bubble |
-| **Mode 3: 3D Rocket STL** | `blockMeshDict_rocket.jinja` | Full 3D half-tunnel ($z \ge 0$) or full-tunnel around STL | $x \in [-3L, \; +8L]$, $y \in [-4L, \; +4L]$, $z \in [0, \; 4L]$ | Longitudinal pitch symmetry across $Z = 0$ (`symmetryPlane`); preserves 3D turbulent wake asymmetry |
+| **Mode 3: 3D Rocket STL** | `blockMeshDict_rocket.jinja` | Full 3D half-tunnel ($z \ge 0$) or full-tunnel around STL | $x \in [-3L, +8L]$, $y \in [-4L, +4L]$, $z \in [0, 4L]$ | Longitudinal pitch symmetry across $Z = 0$ (`symmetryPlane`); preserves 3D turbulent wake asymmetry |
 
 ---
 
@@ -80,7 +79,7 @@ All internal calculations in `src/` and OpenFOAM dictionaries use **SI base unit
 | $\gamma$ | 1.4 | — | Ratio of specific heats ($c_p / c_v$) for diatomic air | Calorically perfect gas |
 | $c_p$ | 1004.5 | J/(kg·K) | Specific heat at constant pressure | $\gamma R_{\mathrm{air}} / (\gamma - 1)$ |
 | $\mathrm{Pr}$ | 0.71 | — | Molecular Prandtl number for air | Standard air tables |
-| $T_0$ | 288.15 | K | ISA sea-level standard temperature ($15.0\;^\circ\mathrm{C}$) | ISO 2533:1975 |
+| $T_0$ | 288.15 | K | ISA sea-level standard temperature (15.0 °C) | ISO 2533:1975 |
 | $p_0$ | 101 325.0 | Pa | ISA sea-level standard static pressure | ISO 2533:1975 |
 | $\rho_0$ | 1.2250 | kg/m³ | ISA sea-level standard density | ISO 2533:1975 |
 | $L_{\mathrm{tropo}}$ | $-0.0065$ | K/m | Tropospheric temperature lapse rate ($0\text{--}11$ km) | ISO 2533:1975 |
@@ -166,9 +165,9 @@ $$a_{f,L} = \sqrt{\gamma R_{\mathrm{air}} T_L}, \quad a_{f,R} = \sqrt{\gamma R_{
 
 The directional maximum outward and inward wave speeds at the face are bounded by:
 
-$$\phi_+ = \max\left( \mathbf{U}_L \cdot \mathbf{S}_f + a_{f,L}|\mathbf{S}_f|, \; \mathbf{U}_R \cdot \mathbf{S}_f + a_{f,R}|\mathbf{S}_f|, \; 0 \right)$$
+$$\phi_+ = \max\left( \mathbf{U}_L \cdot \mathbf{S}_f + a_{f,L}|\mathbf{S}_f|, \, \mathbf{U}_R \cdot \mathbf{S}_f + a_{f,R}|\mathbf{S}_f|, \, 0 \right)$$
 
-$$\phi_- = \min\left( \mathbf{U}_L \cdot \mathbf{S}_f - a_{f,L}|\mathbf{S}_f|, \; \mathbf{U}_R \cdot \mathbf{S}_f - a_{f,R}|\mathbf{S}_f|, \; 0 \right)$$
+$$\phi_- = \min\left( \mathbf{U}_L \cdot \mathbf{S}_f - a_{f,L}|\mathbf{S}_f|, \, \mathbf{U}_R \cdot \mathbf{S}_f - a_{f,R}|\mathbf{S}_f|, \, 0 \right)$$
 
 Defining the weighting factor $\alpha_f = \frac{\phi_+}{\phi_+ - \phi_-}$, the numerical convective flux across face $f$ is evaluated as:
 
@@ -204,7 +203,7 @@ $$\frac{\partial (\rho \omega)}{\partial t} + \nabla \cdot (\rho \mathbf{U} \ome
 
 Crucially for supersonic shock-boundary-layer interaction (SBLI), the turbulent eddy viscosity $\mu_t$ is bounded by Bradshaw's structural stress limiter ($a_1 = 0.31$):
 
-$$\mu_t = \frac{\rho a_1 k}{\max(a_1 \omega, \; S F_2)}$$
+$$\mu_t = \frac{\rho a_1 k}{\max(a_1 \omega, \, S F_2)}$$
 
 This prevents unphysical over-prediction of turbulent kinetic energy $k$ across normal and oblique shock waves.
 
@@ -240,9 +239,13 @@ $$\frac{\gamma - 1}{2}\left( 1 - V_r^{\prime 2} - V_\theta^{\prime 2} \right)\le
 
 ### 7.2 First-order state-space system and Rankine-Hugoniot initial values
 
-Defining the state vector $\mathbf{y}(\theta) = [V'_r, \; V'_\theta]^T$ and dimensionless sound speed squared $\tilde{a}^2 = \frac{\gamma - 1}{2}(1 - V_r^{\prime 2} - V_\theta^{\prime 2})$, the system solved by `scipy.integrate.solve_ivp` (RK45) is:
+Defining the state vector $\mathbf{y}(\theta) = [V_r', V_\theta']^T$ and dimensionless sound speed squared $\tilde{a}^2$:
 
-$$\frac{d}{d\theta}\begin{bmatrix} V'_r \\ V'_\theta \end{bmatrix} = \begin{bmatrix} V'_\theta \\[6pt] \dfrac{V_\theta^{\prime 2} V'_r - \tilde{a}^2 (2 V'_r + V'_\theta \cot\theta)}{\tilde{a}^2 - V_\theta^{\prime 2}} \end{bmatrix}$$
+$$\tilde{a}^2 = \frac{\gamma - 1}{2}\left(1 - V_r^{\prime 2} - V_\theta^{\prime 2}\right)$$
+
+the system solved by `scipy.integrate.solve_ivp` (RK45) is:
+
+$$\frac{d}{d\theta}\begin{bmatrix} V_r' \\ V_\theta' \end{bmatrix} = \begin{bmatrix} V_\theta' \\ \dfrac{V_\theta^{\prime 2} V_r' - \tilde{a}^2 (2 V_r' + V_\theta' \cot\theta)}{\tilde{a}^2 - V_\theta^{\prime 2}} \end{bmatrix}$$
 
 Integration proceeds inward from a candidate oblique shock angle $\theta = \beta$ where the immediate post-shock state is fixed by the oblique Rankine-Hugoniot relations ($M_{n1} = M_\infty \sin\beta > 1$):
 
@@ -313,9 +316,9 @@ where the **thermal recovery factor** $r$ depends on the boundary-layer regime (
 - **Turbulent boundary layer:** $r_{\mathrm{turb}} = \mathrm{Pr}^{1/3} = (0.71)^{1/3} \approx 0.8921$
 
 At sea level ($T_\infty = 288.15$ K) and $M_\infty = 2.00$:
-- $T_0 = 518.67\;\mathrm{K}$ ($245.5\;^\circ\mathrm{C}$)
-- $T_{\mathrm{rec,turb}} = 493.80\;\mathrm{K}$ ($220.7\;^\circ\mathrm{C}$)
-- $T_{\mathrm{rec,lam}} = 482.39\;\mathrm{K}$ ($209.2\;^\circ\mathrm{C}$)
+- $T_0 = 518.67\text{ K}$ (245.5 °C)
+- $T_{\mathrm{rec,turb}} = 493.80\text{ K}$ (220.7 °C)
+- $T_{\mathrm{rec,lam}} = 482.39\text{ K}$ (209.2 °C)
 
 ---
 
@@ -334,7 +337,7 @@ For complex 3D rocket geometries (`nose.stl`, `fuselage.stl`, `fins.stl`, `base.
 1. **Castellated Mesh (`castellatedMesh: true`):**
    - Feature edge extraction (`surfaceFeatureExtractDict.jinja`) at $150^\circ$ included angle.
    - Surface refinement levels $(3, 4)$ on fuselage/base and $(4, 5)$ on nose tip and fin leading/trailing edges.
-   - Volumetric refinement box (`wakeAndShockBox`, level 3) spanning $x \in [-0.5L, \; +4.5L]$ to preserve shock sharpness and capture asymmetric turbulent vortex shedding in the rocket wake.
+   - Volumetric refinement box (`wakeAndShockBox`, level 3) spanning $x \in [-0.5L, +4.5L]$ to preserve shock sharpness and capture asymmetric turbulent vortex shedding in the rocket wake.
 2. **Surface Snapping (`snap: true`):**
    - Projects jagged staircase vertices onto the triangulated STL patches (`nSmoothPatch: 3`, `nRelaxIter: 5`).
 3. **Boundary Layer Inflation (`addLayers: true`):**
@@ -368,7 +371,7 @@ The longitudinal location of the **center of pressure** $X_{cp}$ measured aft fr
 
 $$X_{cp} = X_{\mathrm{ref}} - \frac{C_{m,\mathrm{pitch}}}{C_N} L_{\mathrm{ref}}$$
 
-A rocket is aerodynamically statically stable in pitch when $X_{cp} > X_{\mathrm{cg}}$, giving a positive static margin $\mathrm{SM} = (X_{cp} - X_{\mathrm{cg}}) / D_{\mathrm{ref}} > 0$. Converged flight points are exported to structured JSON and appended to the master CSV database (`AeroDB`) for direct ingestion by 6-DOF flight dynamics and orbital ascent simulators.
+A rocket is aerodynamically statically stable in pitch when $X_{cp} > X_{\mathrm{cg}}$, giving a positive static margin $\mathrm{SM} = (X_{cp} - X_{\mathrm{cg}}) / D_{\mathrm{ref}} > 0$. Converged flight points are exported to structured JSON and appended to the master CSV database (`AeroDB`) for direct ingestion by 6-DOF flight dynamics and trajectory simulation tools.
 
 ---
 
@@ -376,7 +379,7 @@ A rocket is aerodynamically statically stable in pitch when $X_{cp} > X_{\mathrm
 
 ### 12.1 Numerical Schlieren imaging (`src/postprocess/schlieren.py`)
 
-Optical wind-tunnel Schlieren photography visualizes refractive index variations proportional to the first spatial derivative of gas density (Gladstone-Dale relation). Numerically, the simulator computes the spatial gradient of the cell-centered density field $\nabla\rho = (\partial\rho/\partial x, \; \partial\rho/\partial y, \; \partial\rho/\partial z)$ using VTK's green-gauss derivative filter (`compute_derivative`), and evaluates both the Euclidean magnitude and a logarithmic contrast enhancement field:
+Optical wind-tunnel Schlieren photography visualizes refractive index variations proportional to the first spatial derivative of gas density (Gladstone-Dale relation). Numerically, the simulator computes the spatial gradient of the cell-centered density field $\nabla\rho = (\partial\rho/\partial x, \partial\rho/\partial y, \partial\rho/\partial z)$ using VTK's green-gauss derivative filter (`compute_derivative`), and evaluates both the Euclidean magnitude and a logarithmic contrast enhancement field:
 
 $$S(\mathbf{x}) = |\nabla\rho| = \sqrt{\left(\frac{\partial\rho}{\partial x}\right)^2 + \left(\frac{\partial\rho}{\partial y}\right)^2 + \left(\frac{\partial\rho}{\partial z}\right)^2}, \quad S_{\log}(\mathbf{x}) = \log_{10}\left( 1 + |\nabla\rho| \right)$$
 
@@ -389,7 +392,7 @@ To visualize real-time deceleration across shock waves and recirculation inside 
 1. **RK45 Streamline Integration:** Seed points are integrated through the steady velocity field $\mathbf{U}(\mathbf{x})$ using 4th/5th-order Runge-Kutta (`streamlines_from_source`).
 2. **Physical Residence Time Parameterization:** Along each trajectory of arc-length $s$, the physical residence time $t(s)$ is integrated from the local speed $|\mathbf{U}(s)|$:
 
-$$t(s) = \int_0^s \frac{ds'}{\max\left(|\mathbf{U}(s')|, \; U_{\min}\right)}$$
+$$t(s) = \int_0^s \frac{ds'}{\max\left(|\mathbf{U}(s')|, U_{\min}\right)}$$
 
 3. **360° Volumetric Revolution & In-Place GPU Update:** Trajectories are replicated across 16 diametral planes (32 radial half-planes around the $X$ axis). At each 60 Hz animation tick ($\Delta\tau$), particle phase offsets advance uniformly in physical time $t$, and the single `pyvista.PolyData` vertex buffer (`cloud_polydata.points`) and scalar Mach buffer (`cloud_polydata.point_data["Mach"]`) are updated in-place in GPU memory. Particles naturally bunch up and slow down as they traverse the detached bow shock and base wake.
 
@@ -433,8 +436,8 @@ All physical modules, analytical solvers, and OpenFOAM CFD benchmarks are verifi
 
 | Limitation | Physical Impact | Engineering Rationale |
 |---|---|---|
-| **Calorically perfect gas** ($\gamma = 1.4, \; c_p = \mathrm{const}$) | Over-predicts stagnation temperature $T_0$ at hypersonic speeds ($M_\infty > 5$) where vibrational excitation and $\mathrm{O}_2/\mathrm{N}_2$ dissociation absorb thermal energy | Valid and exact across the target subsonic, transonic, and supersonic launch envelope ($M_\infty \in [0.2, \; 3.5+]$) where $T_0 < 800$ K |
-| **5° axisymmetric wedge for Cone & Sphere benchmarks** | Enforces circumferential symmetry ($\partial/\partial\phi = 0, \; u_\phi = 0$); prevents 3D helical vortex shedding in the sphere wake | Reduces cell count from $\sim 1.5\times 10^6$ to $\sim 10^4$ cells, enabling sub-minute benchmark verification against analytical 2D/axisymmetric theory |
+| **Calorically perfect gas** ($\gamma = 1.4, c_p = \text{const}$) | Over-predicts stagnation temperature $T_0$ at hypersonic speeds ($M_\infty > 5$) where vibrational excitation and $\mathrm{O}_2/\mathrm{N}_2$ dissociation absorb thermal energy | Valid and exact across the target subsonic, transonic, and supersonic launch envelope ($M_\infty \in [0.2, 3.5+]$) where $T_0 < 800$ K |
+| **5° axisymmetric wedge for Cone & Sphere benchmarks** | Enforces circumferential symmetry ($\partial/\partial\phi = 0, u_\phi = 0$); prevents 3D helical vortex shedding in the sphere wake | Reduces cell count from $\sim 1.5\times 10^6$ to $\sim 10^4$ cells, enabling sub-minute benchmark verification against analytical 2D/axisymmetric theory |
 | **Adiabatic wall thermal boundary condition (`zeroGradient`)** | Computes maximum steady-state recovery temperature $T_{\mathrm{rec}}$ rather than transient conductive heat transfer into the rocket skin | Provides a conservative upper-bound thermal design envelope without requiring structural material thickness or internal thermal capacitance specs |
 | **Cold-wall base flow (no rocket exhaust plume)** | Base drag ($C_{D,\mathrm{base}}$) is evaluated for an unpowered coast / power-off condition | Power-on plume interaction requires multi-species combustion products; power-off base drag represents the worst-case coasting drag post-MECO |
 | **RANS turbulence closure** ($k$-$\omega$ SST) | Models ensemble-averaged Reynolds stresses rather than resolving unsteady large-scale turbulent eddies (LES/DES) | Standard industrial aerospace methodology for aerodynamic database generation, balancing boundary-layer separation accuracy with computational tractability |
