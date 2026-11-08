@@ -4,13 +4,12 @@ Permite ejecutar blockMesh, snappyHexMesh y rhoCentralFoam en segundo plano sin 
 capturando la salida en tiempo real y emitiendo señales Qt con métricas para visualización.
 """
 
-import os
 import subprocess
 import time
 from pathlib import Path
 from PyQt6.QtCore import QThread, pyqtSignal
 
-from src.backend.log_parser import OpenFOAMLogParser, IterationMetrics
+from src.backend.log_parser import OpenFOAMLogParser
 
 
 def windows_to_wsl_path(win_path: Path | str) -> str:
@@ -38,7 +37,9 @@ class OpenFOAMRunner(QThread):
         case_dir_windows: Path | str,
         wsl_distro: str = "Ubuntu-22.04",
         run_parallel: bool = False,
-        num_cores: int = 6
+        num_cores: int = 6,
+        run_blockmesh: bool = False,
+        end_time: float | None = None
     ) -> None:
         super().__init__()
         self.case_dir_win = Path(case_dir_windows).resolve()
@@ -46,6 +47,8 @@ class OpenFOAMRunner(QThread):
         self.wsl_distro = wsl_distro
         self.run_parallel = run_parallel
         self.num_cores = num_cores
+        self.run_blockmesh = run_blockmesh
+        self.end_time = end_time
 
         self._is_cancelled = False
         self._current_process: subprocess.Popen | None = None
@@ -59,8 +62,15 @@ class OpenFOAMRunner(QThread):
         try:
             self.status_changed.emit("Iniciando pipeline de simulación en WSL2...")
 
+            # 0. Opcionalmente generar malla con blockMesh
+            if self.run_blockmesh:
+                self.status_changed.emit("Generando malla estructurada (blockMesh)...")
+                ok_mesh = self._execute_wsl_command("blockMesh", log_filename="log.blockMesh")
+                if not ok_mesh or self._is_cancelled:
+                    return
+
             # 1. Ejecutar solver
-            self.status_changed.emit("Ejecutando rhoCentralFoam...")
+            self.status_changed.emit("Ejecutando solver compresible rhoCentralFoam...")
             solver_cmd = "rhoCentralFoam"
             if self.run_parallel:
                 solver_cmd = f"mpirun -np {self.num_cores} rhoCentralFoam -parallel"
@@ -117,6 +127,9 @@ class OpenFOAMRunner(QThread):
                 metrics = self.parser.parse_line(line)
                 if metrics:
                     self.iteration_updated.emit(metrics)
+                    if self.end_time and self.end_time > 0:
+                        pct = min(max(metrics.time / self.end_time * 100.0, 0.0), 99.9)
+                        self.progress_changed.emit(pct)
 
             self._current_process.stdout.close()
             ret_code = self._current_process.wait()

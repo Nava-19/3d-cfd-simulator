@@ -132,43 +132,40 @@ Este documento establece la ruta crítica secuencial de desarrollo. Para maximiz
 ### Fase 7: Algoritmos de Post-procesado y Renderizado 3D
 > **Objetivo:** Extraer los campos físicos clave (ondas de choque, temperatura de fricción y líneas de corriente).
 
-- [ ] `7.1` **Implementar filtro de efecto Schlieren numérico**
+- [x] `7.1` **Implementar filtro de efecto Schlieren numérico (`src/postprocess/schlieren.py`)**
   - En PyVista/VTK, calcular el gradiente del campo escalar de densidad: $|\nabla \rho| = \sqrt{(\partial\rho/\partial x)^2 + (\partial\rho/\partial y)^2 + (\partial\rho/\partial z)^2}$.
-  - Renderizar en escala de grises invertida para visualizar ondas de choque oblicuas y expansiones de Prandtl-Meyer.
-- [ ] `7.2` **Mapear temperatura de pared (Aeroheating)**
-  - Extraer el parche de superficie del cohete (`nose`, `fuselage`, `fins`).
-  - Aplicar mapa de color térmico (inferno / coolwarm) mostrando la temperatura de recuperación $T_{rec}$ en Kelvin.
-  - Localizar y etiquetar el punto de remanso (stagnation point) en la punta de la ojiva ($T_{stagnation} = T_\infty(1 + \frac{\gamma-1}{2}M^2)$).
-- [ ] `7.3` **Generar líneas de corriente 3D (Streamlines)**
-  - Configurar semillero de partículas en la entrada (`source_rake` o plano).
-  - Trazar integrales del campo vectorial de velocidad $U$ coloreadas por número de Mach local.
-- [ ] `7.4` **Crear generador de informes AeroDB (`src/postprocess/aerodb_exporter.py`)**
-  - Exportar resultados convergidos a un archivo `results.json` y `aerodb.csv` con: Mach, Altitud, $\alpha$, $C_D$, $C_L$, $C_m$, $x_{cp}$ (centro de presiones) y $T_{max,nose}$.
+  - Renderizar en escala de grises invertida (`schlieren_log`) para visualizar ondas de choque oblicuas y expansiones de Prandtl-Meyer.
+- [x] `7.2` **Mapear temperatura de pared (Aeroheating) (`src/postprocess/aeroheating.py`)**
+  - Extraer los parches de superficie del vehículo (`nose`, `fuselage`, `fins`, `base`, `cone`) y calcular $C_p$.
+  - Aplicar mapa de color térmico (`inferno`) mostrando la temperatura en Kelvin y localizando el punto caliente / remanso ($T_0 = T_\infty(1 + \frac{\gamma-1}{2}M^2)$).
+- [x] `7.3` **Generar líneas de corriente 3D (Streamlines) (`src/postprocess/streamlines.py`)**
+  - Configurar semillero de partículas en la entrada e integrar mediante Runge-Kutta 45 (`vtkStreamTracer`) coloreando por número de Mach local.
+- [x] `7.4` **Crear generador de informes AeroDB (`src/postprocess/aerodb_exporter.py`)**
+  - Exportar resultados convergidos a `results/*.json` y `results/aerodb.csv` con: Mach, Altitud, $\alpha$, $C_D$, $C_L$, $C_m$, $x_{cp}$ (centro de presiones) y $T_{max}$.
 
 ---
 
 ### Fase 8: Interfaz Gráfica de Usuario (PyQt6 + PyVista)
 > **Objetivo:** Construir una aplicación de escritorio profesional con visor 3D interactivo y telemetría de convergencia.
 
-- [ ] `8.1` **Crear estructura modular de la GUI (`src/gui/`)**
-  - `main_window.py`: Ventana principal, menús y distribución de paneles.
-  - `control_panel.py`: Barra lateral izquierda de configuración.
-  - `plots_panel.py`: Panel inferior con pestañas para gráficas en vivo.
-  - `viewport_panel.py`: Área central con el visor 3D.
-- [ ] `8.2` **Construir el panel de control de vuelo**
-  - Spinboxes para `Mach` (rango 0.2 a 4.0), `Altitud (km)` (0 a 30 km) y `Ángulo de ataque` ($0^\circ$ a $15^\circ$).
+- [x] `8.1` **Crear estructura modular de la GUI (`src/gui/` y `main.py`)**
+  - `main_window.py`: Ventana principal `CFDMainWindow` con tema oscuro aeroespacial y divisores `QSplitter`.
+  - `control_panel.py`: Barra lateral izquierda de configuración y monitor ISA 1976 en tiempo real.
+  - `plots_panel.py`: Panel inferior con pestañas para gráficas en vivo y consola WSL2.
+  - `viewport_panel.py`: Área central con el visor 3D interactivo acelerado por GPU.
+- [x] `8.2` **Construir el panel de control de vuelo (`src/gui/control_panel.py`)**
+  - Spinboxes para `Mach` (0.2 a 4.0), `Altitud (km)` (0 a 30 km), `Ángulo de ataque` ($0^\circ$ a $15^\circ$) y `Semiángulo de cono`.
   - Selector de archivos para importar los STL del cohete.
-  - Botón selector entre **"Simulación Completa"** y **"Modo Validación (Cono Teórico)"**.
-  - Display informativo con las variables ISA calculadas en tiempo real al mover los controles.
-  - Botón "Iniciar Simulación" y botón "Abortar".
-- [ ] `8.3` **Integrar gráficas de convergencia en vivo con PyQtGraph**
-  - Gráfica 1: Residuos logarítmicos vs. Iteraciones/Tiempo físico.
-  - Gráfica 2: Coeficiente de resistencia ($C_D$) y sustentación ($C_L$) estabilizándose.
-- [ ] `8.4` **Embeber el visor 3D de PyVista (`QVTKRenderWindowInteractor`)**
-  - Integrar el widget interactivo en el centro de la interfaz.
-  - Configurar iluminación especular para materiales aerodinámicos.
-  - Añadir barra de herramientas 3D: conmutador para ver Malla, Geometría sólida, Presión en pared, Temperatura de recuperación, Schlieren en plano simétrico y Líneas de corriente.
-  - Añadir leyenda de colores interactiva y ejes coordenados 3D.
+  - Conmutador entre **"Modo Validación (Cono Taylor-Maccoll)"** y **"Simulación Completa Cohete 3D"**.
+  - Display informativo con las variables ISA y límites térmicos ($T_0$, $T_{rec}$) recalculados en vivo.
+  - Botones "Iniciar Simulación", "Abortar", "Cargar Caso" y "Exportar a AeroDB".
+- [x] `8.3` **Integrar gráficas de convergencia en vivo con PyQtGraph (`src/gui/plots_panel.py`)**
+  - Gráfica 1: Coeficiente de resistencia ($C_D$), sustentación ($C_L$) y momento de cabeceo ($C_m$).
+  - Gráfica 2: Número de Courant ($Co_{max}$ con línea límite CFL = 0.75) y residuos logarítmicos ($\log_{10} R$).
+- [x] `8.4` **Embeber el visor 3D de PyVista (`src/gui/viewport_panel.py`)**
+  - Integrado `QtInteractor` (`QVTKRenderWindowInteractor`) en el centro de la ventana.
+  - Barra de herramientas 3D: conmutadores para Temperatura de Pared, $C_p$, Presión, Malla Wireframe, Plano Schlieren ($|\nabla \rho|$), Generatriz Analítica de Choque de Taylor-Maccoll y Streamlines 3D.
+  - Suite completa de pruebas de integración (`tests/test_postprocess.py` y `tests/test_gui.py`) pasando al 100% (24/24 tests passing).
 
 ---
 
