@@ -263,7 +263,7 @@ class Viewport3DPanel(QWidget):
     def _on_animation_tick(self) -> None:
         """Actualiza in-place las posiciones 3D de las partículas en la GPU sin reconstruir la escena."""
         if self.particle_system is not None and self.chk_particles.isChecked():
-            self.particle_system.step(delta_phase=0.012)
+            self.particle_system.step(delta_phase=0.008)
             self.plotter.render()
 
     def load_openfoam_case(
@@ -346,15 +346,15 @@ class Viewport3DPanel(QWidget):
                     x_end_m=xmax
                 )
 
-        # 5. Generar líneas de corriente 3D y Sistema Lagrangiano de Partículas en 16 planos
+        # 5. Generar líneas de corriente 3D y Sistema Lagrangiano de Partículas de Alta Densidad
         self.streamlines_mesh = generate_streamlines(
             internal_mesh=internal_mesh,
-            n_seeds=20,
+            n_seeds=24,
             mirror_symmetry=True
         )
         self.particle_system = LagrangianParticleSystem(
             streamlines_polydata=self.streamlines_mesh,
-            n_particles_per_track=10,
+            n_particles_per_track=18,
             revolve_3d_azimuths=16
         )
 
@@ -526,7 +526,7 @@ class Viewport3DPanel(QWidget):
                 }
             )
 
-        # 6. Nube 3D de Partículas de Fluido en Movimiento (16 Planos Diametrales)
+        # 6. Nube 3D de Partículas de Fluido en Movimiento (Alta Densidad en 16 Planos)
         if (
             self.chk_particles.isChecked()
             and self.particle_system is not None
@@ -537,7 +537,7 @@ class Viewport3DPanel(QWidget):
                 scalars="Mach",
                 cmap="plasma",
                 render_points_as_spheres=True,
-                point_size=7.5,
+                point_size=3.4,
                 show_scalar_bar=not self.chk_streamlines.isChecked(),
                 scalar_bar_args={
                     "title": "Mach Local [-]",
@@ -570,19 +570,31 @@ class Viewport3DPanel(QWidget):
         self.plotter.render()
 
     def set_view_xy(self) -> None:
-        """Coloca la cámara perpendicular al plano meridiano X-Y."""
+        """Coloca la cámara perpendicular al plano meridiano X-Y con zoom centrado en el modelo."""
         self.plotter.view_xy()
         self.plotter.reset_camera()
+        if self.surface_mesh is not None:
+            cx, cy, cz = self.surface_mesh.center
+            self.plotter.set_focus((cx, cy, cz))
+            self.plotter.camera.zoom(1.45)
         self.plotter.render()
 
     def set_view_isometric(self) -> None:
-        """Coloca la cámara en perspectiva isométrica 3D aeroespacial."""
+        """Coloca la cámara en perspectiva isométrica 3D enfocada en la interacción choque-cuerpo."""
         self.plotter.view_isometric()
         self.plotter.reset_camera()
+        if self.surface_mesh is not None:
+            cx, cy, cz = self.surface_mesh.center
+            self.plotter.set_focus((cx, cy, cz))
+            self.plotter.camera.zoom(1.80)
         self.plotter.render()
 
     def set_view_front(self) -> None:
         """Coloca la cámara mirando de frente a la proa del vehículo (plano Y-Z)."""
         self.plotter.view_yz()
         self.plotter.reset_camera()
+        if self.surface_mesh is not None:
+            cx, cy, cz = self.surface_mesh.center
+            self.plotter.set_focus((cx, cy, cz))
+            self.plotter.camera.zoom(1.45)
         self.plotter.render()
