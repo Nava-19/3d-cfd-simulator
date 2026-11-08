@@ -53,7 +53,14 @@ The simulator operates in a right-handed **three-dimensional body-fixed Cartesia
 
 For a given flight Mach number $M_\infty$, altitude $h$, and angle of attack $\alpha$ in the $X$-$Y$ pitch plane (with sideslip $\beta_{slip} = 0^\circ$):
 
-$$\mathbf{U}_\infty = \begin{bmatrix} U_\infty \cos\alpha \\ U_\infty \sin\alpha \\ 0 \end{bmatrix}, \quad U_\infty = M_\infty \, a_\infty$$
+$$
+\mathbf{U}_\infty = \begin{bmatrix}
+U_\infty \cos\alpha \\
+U_\infty \sin\alpha \\
+0
+\end{bmatrix},
+\quad U_\infty = M_\infty a_\infty
+$$
 
 ### 1.1 Computational domain topologies
 
@@ -99,7 +106,25 @@ $$\frac{\partial}{\partial t} \int_\Omega \mathbf{W} \, d\Omega + \oint_{\partia
 
 where the conservative state vector $\mathbf{W}$, convective flux tensor $\mathbf{F}_c$, and viscous flux tensor $\mathbf{F}_v$ are defined as:
 
-$$\mathbf{W} = \begin{bmatrix} \rho \\ \rho \mathbf{U} \\ \rho E \end{bmatrix}, \quad \mathbf{F}_c = \begin{bmatrix} \rho \mathbf{U} \\ \rho \mathbf{U} \otimes \mathbf{U} + p \mathbf{I} \\ (\rho E + p)\mathbf{U} \end{bmatrix}, \quad \mathbf{F}_v = \begin{bmatrix} 0 \\ \boldsymbol{\tau} \\ \boldsymbol{\tau} \cdot \mathbf{U} - \mathbf{q} \end{bmatrix}$$
+$$
+\mathbf{W} = \begin{bmatrix}
+\rho \\
+\rho \mathbf{U} \\
+\rho E
+\end{bmatrix},
+\quad
+\mathbf{F}_c = \begin{bmatrix}
+\rho \mathbf{U} \\
+\rho \mathbf{U} \otimes \mathbf{U} + p \mathbf{I} \\
+(\rho E + p)\mathbf{U}
+\end{bmatrix},
+\quad
+\mathbf{F}_v = \begin{bmatrix}
+0 \\
+\boldsymbol{\tau} \\
+\boldsymbol{\tau} \cdot \mathbf{U} - \mathbf{q}
+\end{bmatrix}
+$$
 
 ### 3.1 Thermodynamic closure (`hePsiThermo`)
 
@@ -245,7 +270,17 @@ $$\tilde{a}^2 = \frac{\gamma - 1}{2}\left(1 - V_r^{\prime 2} - V_\theta^{\prime 
 
 the system solved by `scipy.integrate.solve_ivp` (RK45) is:
 
-$$\frac{d}{d\theta}\begin{bmatrix} V_r' \\ V_\theta' \end{bmatrix} = \begin{bmatrix} V_\theta' \\ \dfrac{V_\theta^{\prime 2} V_r' - \tilde{a}^2 (2 V_r' + V_\theta' \cot\theta)}{\tilde{a}^2 - V_\theta^{\prime 2}} \end{bmatrix}$$
+$$
+\frac{d}{d\theta}\begin{bmatrix}
+V_r' \\
+V_\theta'
+\end{bmatrix}
+=
+\begin{bmatrix}
+V_\theta' \\
+\dfrac{V_\theta^{\prime 2} V_r' - \tilde{a}^2 (2 V_r' + V_\theta' \cot\theta)}{\tilde{a}^2 - V_\theta^{\prime 2}}
+\end{bmatrix}
+$$
 
 Integration proceeds inward from a candidate oblique shock angle $\theta = \beta$ where the immediate post-shock state is fixed by the oblique Rankine-Hugoniot relations ($M_{n1} = M_\infty \sin\beta > 1$):
 
@@ -359,7 +394,19 @@ $$C_D = \frac{\mathbf{F} \cdot \hat{e}_{\mathrm{drag}}}{q_\infty A_{\mathrm{ref}
 
 where the wind-axis unit vectors rotate with the angle of attack $\alpha$:
 
-$$\hat{e}_{\mathrm{drag}} = \begin{bmatrix} \cos\alpha \\ \sin\alpha \\ 0 \end{bmatrix}, \quad \hat{e}_{\mathrm{lift}} = \begin{bmatrix} -\sin\alpha \\ \cos\alpha \\ 0 \end{bmatrix}$$
+$$
+\hat{e}_{\mathrm{drag}} = \begin{bmatrix}
+\cos\alpha \\
+\sin\alpha \\
+0
+\end{bmatrix},
+\quad
+\hat{e}_{\mathrm{lift}} = \begin{bmatrix}
+-\sin\alpha \\
+\cos\alpha \\
+0
+\end{bmatrix}
+$$
 
 ### 11.2 Center of pressure ($X_{cp}$) for GNC stability
 
