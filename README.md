@@ -3,12 +3,20 @@
 [![Python](https://img.shields.io/badge/Python-3.13-blue.svg)](https://www.python.org/)
 [![OpenFOAM](https://img.shields.io/badge/OpenFOAM-v2312%20(OpenCFD)-green.svg)](https://www.openfoam.com/)
 [![GUI](https://img.shields.io/badge/GUI-PyQt6%20%7C%20PyVista%20%7C%20VTK-orange.svg)](https://pyvista.org/)
-[![Tests](https://img.shields.io/badge/Tests-16%20Passed-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-25%20Passed-brightgreen.svg)](tests/)
 [![Architecture](https://img.shields.io/badge/Architecture-Asynchronous%20QThread-purple.svg)]()
 
 Industrial-grade, automated computational fluid dynamics (CFD) pipeline designed for 3D rocket aerodynamics and aerodynamic heating across transonic and supersonic regimes ($\text{Mach } 0.2 \to 3.5+$).
 
 Orchestrates **OpenFOAM (`rhoCentralFoam`)** in WSL2 through a decoupled Python backend, providing real-time convergence telemetry via `PyQtGraph` and GPU-accelerated 3D rendering with `PyVista`/`VTK`.
+
+---
+
+## 🎬 Interactive 3D Demonstration
+
+![Supersonic Sphere Bow Shock & Wake CFD Demo](docs/media/demo_sphere_bow_shock.gif)
+
+*Figure: Interactive 3D compressible CFD simulation showing a supersonic blunt body ($\text{Mach } 2.0$ sphere) with detached bow shock, numerical Schlieren gradient field ($|\nabla \rho|$), physical recirculation wake, and Lagrangian particle tracking across 16 diametral planes in PyVista/VTK.*
 
 ---
 
@@ -92,23 +100,15 @@ pytest -v
 ```
 
 ```text
-tests/test_atmosphere.py::test_sea_level_conditions PASSED               [  6%]
-tests/test_atmosphere.py::test_troposphere_5000m PASSED                  [ 12%]
-tests/test_atmosphere.py::test_tropopause_11000m PASSED                  [ 18%]
-tests/test_atmosphere.py::test_lower_stratosphere_20000m PASSED          [ 25%]
-tests/test_atmosphere.py::test_speed_of_sound_sea_level PASSED           [ 31%]
-tests/test_atmosphere.py::test_flight_condition_supersonic_with_aoa PASSED [ 37%]
-tests/test_atmosphere.py::test_altitude_out_of_bounds PASSED             [ 43%]
-tests/test_case_generator.py::test_case_generator_renders_case PASSED    [ 50%]
-tests/test_cone_benchmark.py::test_cone_benchmark_setup PASSED           [ 56%]
-tests/test_cone_benchmark.py::test_cone_benchmark_cfd_vs_taylor_maccoll PASSED [ 62%]
-tests/test_log_parser.py::test_log_parser_extracts_residuals PASSED      [ 68%]
-tests/test_log_parser.py::test_log_parser_extracts_forces PASSED         [ 75%]
-tests/test_runner.py::test_windows_to_wsl_path PASSED                    [ 81%]
-tests/test_runner.py::test_openfoam_runner_instantiation PASSED          [ 87%]
-tests/test_taylor_maccoll.py::test_taylor_maccoll_cone_15deg_mach_2 PASSED [ 93%]
-tests/test_taylor_maccoll.py::test_taylor_maccoll_cone_20deg_mach_3 PASSED [100%]
-============================= 16 passed in 2.41s ==============================
+tests/test_atmosphere.py (7 passed: ISA 1976 thermodynamics & flight conditions)
+tests/test_case_generator.py (2 passed: cone, sphere polar mesh & 3D rocket tunnel)
+tests/test_cone_benchmark.py (2 passed: Taylor-Maccoll ODE vs rhoCentralFoam)
+tests/test_gui.py (3 passed: ISA live update, streaming telemetry, 3D shock & particles)
+tests/test_log_parser.py (2 passed: residual extraction, aerodynamic forces)
+tests/test_postprocess.py (5 passed: Rayleigh-Pitot stagnation, schlieren, aeroheating, particles, aerodb)
+tests/test_runner.py (2 passed: WSL path mapping, OpenFOAM runner instantiation)
+tests/test_taylor_maccoll.py (2 passed: cone ODE benchmarks at Mach 2.0 and Mach 3.0)
+============================= 25 passed in 7.88s ==============================
 ```
 
 ---
