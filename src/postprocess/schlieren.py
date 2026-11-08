@@ -1,5 +1,5 @@
 """
-Módulo de Efecto Schlieren Numérico (Fase 7.1).
+Módulo de Efecto Schlieren Numérico (Fase 7.1 y 8.5).
 Calcula el módulo del gradiente espacial de densidad |∇ρ| en mallas 3D de OpenFOAM
 para visualizar ondas de choque oblicuas, ondas de expansión de Prandtl-Meyer y estelas.
 
@@ -25,8 +25,6 @@ def ensure_thermodynamic_fields(dataset: pv.DataSet) -> pv.DataSet:
     Si 'rho' no fue exportado directamente por el solver, lo reconstruye mediante
     la ecuación de estado de gas ideal: ρ = p / (R_air * T).
     """
-    # Convertir cell_data a point_data si aún no están interpolados a los nodos
-    # (necesario para filtros continuos de derivadas e isocontornos en VTK)
     if "p" in dataset.cell_data and "p" not in dataset.point_data:
         dataset = dataset.cell_data_to_point_data(pass_cell_data=True)
 
@@ -63,11 +61,14 @@ def ensure_thermodynamic_fields(dataset: pv.DataSet) -> pv.DataSet:
 def compute_numerical_schlieren(
     internal_mesh: pv.DataSet,
     slice_normal: tuple[float, float, float] | None = (0.0, 0.0, 1.0),
-    slice_origin: tuple[float, float, float] | None = (0.0, 0.0, 0.0)
+    slice_origin: tuple[float, float, float] | None = (0.0, 0.0, 0.0),
+    mirror_symmetry: bool = True
 ) -> pv.DataSet:
     """
-    Calcula el campo de Schlieren numérico sobre la malla interna 3D y opcionalmente
-    extrae el plano de simetría longitudinal (por defecto Z=0, plano X-Y).
+    Calcula el campo de Schlieren numérico sobre la malla interna 3D y extrae el plano
+    de simetría longitudinal (por defecto Z=0, plano X-Y).
+    Si el dominio proviene de una cuña axisimétrica (Y >= 0), refleja automáticamente
+    el plano respecto al eje Y=0 para mostrar el cono de choque completo (superior e inferior).
 
     Añade los campos escalares:
         - 'grad_rho_mag': |∇ρ| = sqrt((∂ρ/∂x)² + (∂ρ/∂y)² + (∂ρ/∂z)²) [kg/m⁴]
@@ -75,7 +76,6 @@ def compute_numerical_schlieren(
     """
     mesh_with_rho = ensure_thermodynamic_fields(internal_mesh.copy())
 
-    # Calcular el vector gradiente ∇ρ en cada vértice mediante funciones de forma de elementos finitos VTK
     deriv_mesh = mesh_with_rho.compute_derivative(
         scalars="rho",
         gradient="grad_rho",
@@ -89,10 +89,13 @@ def compute_numerical_schlieren(
     deriv_mesh.point_data["schlieren_log"] = np.log10(1.0 + grad_mag)
 
     if slice_normal is not None:
-        # Si la malla es una cuña axisimétrica delgada (ej. benchmark cono +/- 2.5 grados),
-        # el corte por z=0 es un plano meridiano exacto.
         sliced = deriv_mesh.slice(normal=slice_normal, origin=slice_origin)
         if sliced.n_points > 0:
+            _, _, ymin, ymax, _, _ = sliced.bounds
+            if mirror_symmetry and ymin >= -1e-4 and ymax > 1e-3:
+                mirrored = sliced.copy(deep=True)
+                mirrored.points[:, 1] *= -1.0
+                return sliced.merge(mirrored)
             return sliced
 
     return deriv_mesh

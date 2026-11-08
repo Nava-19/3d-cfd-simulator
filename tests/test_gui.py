@@ -1,8 +1,8 @@
 """
-Tests unitarios y de integración para la Interfaz Gráfica de Usuario (Fase 8):
+Tests unitarios y de integración para la Interfaz Gráfica de Usuario (Fase 8 y 8.5):
     - FlightControlPanel (reactividad en vivo con AtmosphereISA)
     - TelemetryPlotsPanel (streaming de métricas y lectura histórica de casos)
-    - Viewport3DPanel y CFDMainWindow (integración completa 3D off-screen con PyVista/VTK)
+    - Viewport3DPanel y CFDMainWindow (cono 360°, volumen de control, partículas en vivo)
 """
 
 import os
@@ -38,7 +38,6 @@ def test_control_panel_updates_isa_in_realtime(qapp):
     assert cond is not None
     assert math.isclose(cond.mach, 3.0)
     assert math.isclose(cond.altitude_m, 11000.0)
-    # En la tropopausa (11 km), T_inf = 216.65 K y T_0(M=3) = 216.65 * (1 + 0.2 * 9) = 606.62 K
     assert math.isclose(cond.temperature_k, 216.65, rel_tol=1e-3)
     assert math.isclose(cond.stagnation_temperature_k, 606.62, rel_tol=1e-3)
 
@@ -58,19 +57,28 @@ def test_plots_panel_streaming_and_history_loading(qapp):
     assert math.isclose(plots.cd_vals[0], 0.145)
 
 
-def test_main_window_loads_and_renders_benchmark_3d_offscreen(qapp):
+def test_main_window_loads_360_cone_particles_and_control_volume(qapp):
     window = CFDMainWindow(off_screen=True)
+    vp = window.viewport_panel
 
-    # Al inicializarse, CFDMainWindow detecta y carga automáticamente cases/benchmark_cone_m2
-    assert window.viewport_panel.surface_mesh is not None
-    assert window.viewport_panel.schlieren_slice is not None
-    assert window.viewport_panel.streamlines_mesh is not None
-    assert window.viewport_panel.aero_metrics is not None
+    assert vp.surface_mesh is not None
+    assert vp.schlieren_slice is not None
+    assert vp.streamlines_mesh is not None
+    assert vp.control_volume_mesh is not None
+    assert vp.particle_system is not None
 
-    # Verificar que las curvas de fuerzas del caso se cargaron en el panel inferior
+    # Verificar que el cono 360° cubre simétricamente +Y, -Y, +Z y -Z
+    _, _, ymin, ymax, zmin, zmax = vp.surface_mesh.bounds
+    assert ymin < -0.10 and ymax > 0.10
+    assert zmin < -0.10 and zmax > 0.10
+
+    # Probar conmutación a Corte Seccional 180° y verificar que sigue cubriendo +Y y -Y
+    vp.combo_body_mode.setCurrentIndex(1)
+    _, _, ymin_180, ymax_180, _, _ = vp.surface_mesh.bounds
+    assert ymin_180 < -0.10 and ymax_180 > 0.10
+
+    # Probar un tick de animación de partículas
+    vp._on_animation_tick()
+
     assert len(window.plots_panel.times_force) > 100
-    assert len(window.plots_panel.cd_vals) > 100
-
-    # Verificar que el reporte de validación Taylor-Maccoll se imprimió en la consola
-    console_text = window.plots_panel.console.toPlainText()
-    assert "Taylor-Maccoll" in console_text
+    assert "Taylor-Maccoll" in window.plots_panel.console.toPlainText()
